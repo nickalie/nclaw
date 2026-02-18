@@ -23,16 +23,20 @@ type Handler struct {
 
 // Default handles incoming messages by forwarding them to Claude Code.
 func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.Update) {
-	if update.Message == nil || update.Message.Text == "" {
-		log.Printf("handler: skipping update (no message or empty text)")
+	if update.Message == nil {
 		return
 	}
 
 	msg := update.Message
+	text, att := messageContent(msg)
+
+	if text == "" && att == nil {
+		log.Printf("handler: skipping update (no text or attachment)")
+		return
+	}
+
 	chatID := msg.Chat.ID
 	threadID := msg.MessageThreadID
-	log.Printf("handler: received message from chat=%d thread=%d text=%q", chatID, threadID, msg.Text)
-
 	dir := chatDir(chatID, threadID)
 	ensureDir(dir)
 
@@ -41,18 +45,11 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 
 	go sendTyping(typingCtx, b, chatID, threadID)
 
-	taskPrompt := h.Scheduler.FormatTaskList(chatID, threadID)
+	prompt := buildPrompt(parentCtx, b, text, att, dir)
+	log.Printf("handler: received message from chat=%d thread=%d text=%q hasFile=%v", chatID, threadID, text, att != nil)
 
-	log.Printf("handler: calling claude.Continue in dir=%s", dir)
-	reply, err := claude.New().Dir(dir).AppendSystemPrompt(taskPrompt).Continue(msg.Text)
+	reply := h.callClaude(dir, prompt, chatID, threadID)
 	stopTyping()
-
-	if err != nil {
-		log.Printf("handler: claude error: %v", err)
-		reply = "error: " + err.Error()
-	}
-
-	reply = h.Scheduler.ProcessReply(reply, chatID, threadID)
 
 	log.Printf("handler: sending reply len=%d", len(reply))
 	_, sendErr := b.SendMessage(parentCtx, &bot.SendMessageParams{
@@ -64,6 +61,52 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 	if sendErr != nil {
 		log.Printf("handler: SendMessage error: %v", sendErr)
 	}
+}
+
+// messageContent extracts the user text and optional attachment from a message.
+func messageContent(msg *models.Message) (string, *attachment) {
+	att := extractAttachment(msg)
+
+	text := msg.Text
+	if att != nil && text == "" {
+		text = msg.Caption
+	}
+
+	return text, att
+}
+
+// buildPrompt constructs the prompt for Claude, downloading any attachment first.
+func buildPrompt(ctx context.Context, b *bot.Bot, text string, att *attachment, dir string) string {
+	if att == nil {
+		return text
+	}
+
+	localPath, err := downloadAttachment(ctx, b, att, dir)
+	if err != nil {
+		log.Printf("handler: download error: %v", err)
+		return text + "\n\n(file attachment failed to download: " + err.Error() + ")"
+	}
+
+	prompt := fmt.Sprintf("I'm sending you a file: %s (saved at %s). Please read it.\n\n", att.filename, localPath)
+	if text != "" {
+		prompt += text
+	}
+
+	return prompt
+}
+
+func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) string {
+	taskPrompt := h.Scheduler.FormatTaskList(chatID, threadID)
+
+	log.Printf("handler: calling claude.Continue in dir=%s", dir)
+	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(taskPrompt).Continue(prompt)
+
+	if err != nil {
+		log.Printf("handler: claude error: %v", err)
+		reply = "error: " + err.Error()
+	}
+
+	return h.Scheduler.ProcessReply(reply, chatID, threadID)
 }
 
 func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {
