@@ -35,6 +35,8 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 		return
 	}
 
+	text = withReplyContext(msg, text)
+
 	chatID := msg.Chat.ID
 	threadID := msg.MessageThreadID
 	dir := chatDir(chatID, threadID)
@@ -54,18 +56,26 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 	reply = processSendFiles(parentCtx, b, reply, chatID, threadID, dir)
 
 	if reply != "" {
-		log.Printf("handler: sending reply len=%d", len(reply))
-		_, sendErr := b.SendMessage(parentCtx, &bot.SendMessageParams{
-			ChatID:          chatID,
-			MessageThreadID: threadID,
-			Text:            reply,
-			ParseMode:       models.ParseModeMarkdown,
-		})
-
-		if sendErr != nil {
-			log.Printf("handler: SendMessage error: %v", sendErr)
-		}
+		sendReply(parentCtx, b, chatID, threadID, reply)
 	}
+}
+
+// withReplyContext prepends the original message text when the user replies to a message.
+func withReplyContext(msg *models.Message, text string) string {
+	if msg.ReplyToMessage == nil {
+		return text
+	}
+
+	original := msg.ReplyToMessage.Text
+	if original == "" {
+		original = msg.ReplyToMessage.Caption
+	}
+
+	if original == "" {
+		return text
+	}
+
+	return fmt.Sprintf("[Replying to message: %s]\n\n%s", original, text)
 }
 
 // messageContent extracts the user text and optional attachment from a message.
@@ -143,5 +153,23 @@ func chatDir(chatID int64, threadID int) string {
 func ensureDir(dir string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("failed to create dir %s: %v", dir, err)
+	}
+}
+
+func sendReply(ctx context.Context, b *bot.Bot, chatID int64, threadID int, text string) {
+	log.Printf("handler: sending reply len=%d", len(text))
+
+	modes := []models.ParseMode{models.ParseModeMarkdown, models.ParseModeMarkdownV1, ""}
+	for _, mode := range modes {
+		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			Text:            text,
+			ParseMode:       mode,
+		})
+		if err == nil {
+			return
+		}
+		log.Printf("handler: SendMessage parseMode=%q error: %v", mode, err)
 	}
 }
