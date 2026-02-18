@@ -15,8 +15,10 @@ import (
 
 // attachment holds normalized file info extracted from a Telegram message.
 type attachment struct {
-	fileID   string
-	filename string
+	fileID       string
+	fileUniqueID string
+	fileSize     int64
+	filename     string
 }
 
 // extractAttachment returns file info if the message contains a file, or nil otherwise.
@@ -31,14 +33,17 @@ func extractAttachment(msg *models.Message) *attachment {
 func extractMedia(msg *models.Message) *attachment {
 	switch {
 	case msg.Document != nil:
-		return &attachment{fileID: msg.Document.FileID, filename: msg.Document.FileName}
+		d := msg.Document
+		return &attachment{fileID: d.FileID, fileUniqueID: d.FileUniqueID, fileSize: d.FileSize, filename: d.FileName}
 	case len(msg.Photo) > 0:
-		best := msg.Photo[len(msg.Photo)-1]
-		return &attachment{fileID: best.FileID, filename: "photo.jpg"}
+		p := msg.Photo[len(msg.Photo)-1]
+		return &attachment{fileID: p.FileID, fileUniqueID: p.FileUniqueID, fileSize: int64(p.FileSize), filename: "photo.jpg"}
 	case msg.Audio != nil:
-		return &attachment{fileID: msg.Audio.FileID, filename: nameOr(msg.Audio.FileName, "audio.ogg")}
+		a := msg.Audio
+		return &attachment{fileID: a.FileID, fileUniqueID: a.FileUniqueID, fileSize: a.FileSize, filename: nameOr(a.FileName, "audio.ogg")}
 	case msg.Voice != nil:
-		return &attachment{fileID: msg.Voice.FileID, filename: "voice.ogg"}
+		v := msg.Voice
+		return &attachment{fileID: v.FileID, fileUniqueID: v.FileUniqueID, fileSize: v.FileSize, filename: "voice.ogg"}
 	default:
 		return nil
 	}
@@ -47,13 +52,21 @@ func extractMedia(msg *models.Message) *attachment {
 func extractExtra(msg *models.Message) *attachment {
 	switch {
 	case msg.Video != nil:
-		return &attachment{fileID: msg.Video.FileID, filename: nameOr(msg.Video.FileName, "video.mp4")}
+		v := msg.Video
+		return &attachment{fileID: v.FileID, fileUniqueID: v.FileUniqueID, fileSize: v.FileSize,
+			filename: nameOr(v.FileName, "video.mp4")}
 	case msg.VideoNote != nil:
-		return &attachment{fileID: msg.VideoNote.FileID, filename: "video_note.mp4"}
+		v := msg.VideoNote
+		return &attachment{fileID: v.FileID, fileUniqueID: v.FileUniqueID, fileSize: int64(v.FileSize),
+			filename: "video_note.mp4"}
 	case msg.Animation != nil:
-		return &attachment{fileID: msg.Animation.FileID, filename: nameOr(msg.Animation.FileName, "animation.mp4")}
+		a := msg.Animation
+		return &attachment{fileID: a.FileID, fileUniqueID: a.FileUniqueID, fileSize: a.FileSize,
+			filename: nameOr(a.FileName, "animation.mp4")}
 	case msg.Sticker != nil:
-		return &attachment{fileID: msg.Sticker.FileID, filename: "sticker.webp"}
+		s := msg.Sticker
+		return &attachment{fileID: s.FileID, fileUniqueID: s.FileUniqueID, fileSize: int64(s.FileSize),
+			filename: "sticker.webp"}
 	default:
 		return nil
 	}
@@ -68,6 +81,13 @@ func nameOr(name, fallback string) string {
 
 // downloadAttachment fetches a file from Telegram and saves it into dir. Returns the local path.
 func downloadAttachment(ctx context.Context, b *bot.Bot, att *attachment, dir string) (string, error) {
+	localPath := filepath.Join(dir, att.filename)
+
+	if isCached(localPath, att) {
+		log.Printf("handler: file %s already cached, skipping download", localPath)
+		return localPath, nil
+	}
+
 	f, err := b.GetFile(ctx, &bot.GetFileParams{FileID: att.fileID})
 	if err != nil {
 		return "", fmt.Errorf("get file: %w", err)
@@ -76,13 +96,43 @@ func downloadAttachment(ctx context.Context, b *bot.Bot, att *attachment, dir st
 	link := b.FileDownloadLink(f)
 	log.Printf("handler: downloading file %s from %s", att.filename, link)
 
-	localPath := filepath.Join(dir, att.filename)
-
 	if err := fetchToFile(ctx, link, localPath); err != nil {
 		return "", fmt.Errorf("download %s: %w", att.filename, err)
 	}
 
+	writeUID(localPath, att.fileUniqueID)
+
 	return localPath, nil
+}
+
+// isCached returns true if the local file exists and matches the attachment's size and unique ID.
+func isCached(localPath string, att *attachment) bool {
+	info, err := os.Stat(localPath)
+	if err != nil {
+		return false
+	}
+
+	if att.fileSize > 0 && info.Size() != att.fileSize {
+		return false
+	}
+
+	if att.fileUniqueID != "" {
+		stored, _ := os.ReadFile(localPath + ".uid")
+		if string(stored) != att.fileUniqueID {
+			return false
+		}
+	}
+
+	return true
+}
+
+func writeUID(localPath, uid string) {
+	if uid == "" {
+		return
+	}
+	if err := os.WriteFile(localPath+".uid", []byte(uid), 0o644); err != nil {
+		log.Printf("handler: failed to write uid file: %v", err)
+	}
 }
 
 func fetchToFile(ctx context.Context, url, dst string) error {
