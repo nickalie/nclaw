@@ -16,10 +16,22 @@ RUN apk add --no-cache \
     github-cli \
     kubectl \
     flux \
-    kustomize
+    kustomize \
+    chromium \
+    harfbuzz \
+    nss \
+    freetype \
+    ttf-freefont \
+    font-noto-emoji
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Install Claude Code (native install, auto-updates)
 RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Install agent-browser (uses system Chromium via env vars above)
+RUN npm install -g agent-browser
 
 # Install Claude Code skills
 RUN npx -y skills add https://github.com/vercel-labs/skills --skill find-skills && \
@@ -31,6 +43,9 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Copy application binary
 COPY --from=builder /build/nclaw /usr/local/bin/nclaw
+
+# Copy schedule skill globally for Claude Code
+COPY .claude/skills/schedule /root/.claude/skills/schedule
 
 WORKDIR /app
 
