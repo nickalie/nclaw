@@ -51,15 +51,19 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 	reply := h.callClaude(dir, prompt, chatID, threadID)
 	stopTyping()
 
-	log.Printf("handler: sending reply len=%d", len(reply))
-	_, sendErr := b.SendMessage(parentCtx, &bot.SendMessageParams{
-		ChatID:          chatID,
-		MessageThreadID: threadID,
-		Text:            reply,
-	})
+	reply = processSendFiles(parentCtx, b, reply, chatID, threadID, dir)
 
-	if sendErr != nil {
-		log.Printf("handler: SendMessage error: %v", sendErr)
+	if reply != "" {
+		log.Printf("handler: sending reply len=%d", len(reply))
+		_, sendErr := b.SendMessage(parentCtx, &bot.SendMessageParams{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			Text:            reply,
+		})
+
+		if sendErr != nil {
+			log.Printf("handler: SendMessage error: %v", sendErr)
+		}
 	}
 }
 

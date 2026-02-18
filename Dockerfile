@@ -44,8 +44,9 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 # Copy application binary
 COPY --from=builder /build/nclaw /usr/local/bin/nclaw
 
-# Copy schedule skill globally for Claude Code
+# Copy skills globally for Claude Code
 COPY .claude/skills/schedule /root/.claude/skills/schedule
+COPY .claude/skills/send-file /root/.claude/skills/send-file
 
 WORKDIR /app
 
