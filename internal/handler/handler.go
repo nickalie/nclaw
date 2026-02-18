@@ -59,6 +59,7 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 			ChatID:          chatID,
 			MessageThreadID: threadID,
 			Text:            reply,
+			ParseMode:       models.ParseModeMarkdown,
 		})
 
 		if sendErr != nil {

@@ -1,10 +1,11 @@
 FROM golang:1.25-alpine AS builder
 
+RUN apk add --no-cache gcc musl-dev
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o nclaw ./cmd/nclaw
+RUN go build -o nclaw ./cmd/nclaw
 
 FROM node:24-alpine
 
@@ -26,6 +27,7 @@ RUN apk add --no-cache \
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV IS_SANDBOX=1
 
 # Install Claude Code (native install, auto-updates)
 RUN curl -fsSL https://claude.ai/install.sh | bash
@@ -39,7 +41,7 @@ RUN npx -y skills add https://github.com/vercel-labs/skills --skill find-skills 
 
 # Install Go (copy from builder)
 COPY --from=builder /usr/local/go /usr/local/go
-ENV PATH="/usr/local/go/bin:${PATH}"
+ENV PATH="/root/.local/bin:/usr/local/go/bin:${PATH}"
 
 # Copy application binary
 COPY --from=builder /build/nclaw /usr/local/bin/nclaw
