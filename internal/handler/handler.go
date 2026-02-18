@@ -30,6 +30,10 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 	msg := update.Message
 	text, att := messageContent(msg)
 
+	if att == nil && msg.ReplyToMessage != nil {
+		att = extractAttachment(msg.ReplyToMessage)
+	}
+
 	if text == "" && att == nil {
 		log.Printf("handler: skipping update (no text or attachment)")
 		return

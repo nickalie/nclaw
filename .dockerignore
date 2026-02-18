@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.vscode
+.env
+.serena
+.agents
+data
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
