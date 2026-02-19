@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nclaw.fullname" . }}
+  labels:
+    {{- include "nclaw.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "nclaw.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nclaw.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.rbac.create }}
+      serviceAccountName: {{ include "nclaw.serviceAccountName" . }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- if and .Values.initCredentials.enabled .Values.claudeCredentialsSecret }}
+        - name: init-credentials
+          image: "{{ .Values.initCredentials.image.repository }}:{{ .Values.initCredentials.image.tag }}"
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /app/data/.claude
+              if [ ! -f /app/data/.claude/credentials.json ]; then
+                cp /tmp/credentials/credentials.json /app/data/.claude/credentials.json
+              fi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: claude-credentials
+              mountPath: /tmp/credentials
+              readOnly: true
+        {{- end }}
+        - name: init-skills
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          command:
+            - sh
+            - -c
+            - |
+              if [ -d /root/.claude/skills ]; then
+                mkdir -p /dest/.claude/skills
+                cp -r /root/.claude/skills/* /dest/.claude/skills/ 2>/dev/null || true
+              fi
+          volumeMounts:
+            - name: data
+              mountPath: /dest
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: NCLAW_DATA_DIR
+              value: {{ .Values.env.dataDir | quote }}
+            - name: NCLAW_TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nclaw.secretName" . }}
+                  key: telegram-bot-token
+            {{- if .Values.env.whitelistChatIds }}
+            - name: NCLAW_TELEGRAM_WHITELIST_CHAT_IDS
+              value: {{ .Values.env.whitelistChatIds | quote }}
+            {{- end }}
+            {{- if .Values.proxy.enabled }}
+            - name: HTTP_PROXY
+              value: {{ .Values.proxy.httpProxy | quote }}
+            - name: HTTPS_PROXY
+              value: {{ .Values.proxy.httpsProxy | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.env.dataDir }}
+            - name: data
+              mountPath: /root/.claude
+              subPath: .claude
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "nclaw.pvcName" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if .Values.claudeCredentialsSecret }}
+        - name: claude-credentials
+          secret:
+            secretName: {{ .Values.claudeCredentialsSecret }}
+            items:
+              - key: credentials.json
+                path: credentials.json
+        {{- end }}

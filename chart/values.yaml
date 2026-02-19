@@ -1,0 +1,54 @@
+image:
+  repository: ghcr.io/nickalie/nclaw
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+#  - name: ghcr-credentials
+
+initCredentials:
+  enabled: true
+  image:
+    repository: busybox
+    tag: latest
+
+env:
+  dataDir: /app/data
+  # Telegram bot token — provide via secret or set directly
+  telegramBotToken: ""
+  # Comma-separated allowed chat IDs
+  whitelistChatIds: ""
+
+# Reference an existing secret for sensitive env vars
+# Secret must contain key "telegram-bot-token"
+existingSecret: ""
+
+proxy:
+  enabled: false
+  httpProxy: ""
+  httpsProxy: ""
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  existingClaim: ""
+
+rbac:
+  # Create ServiceAccount and ClusterRoleBinding
+  create: true
+  # ClusterRole to bind (cluster-admin grants full access for kubectl)
+  clusterRole: cluster-admin
+
+# Claude credentials JSON to mount into /root/.claude/credentials.json
+# Provide via secret — the key must be "credentials.json"
+claudeCredentialsSecret: ""
