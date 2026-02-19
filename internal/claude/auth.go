@@ -55,7 +55,13 @@ func EnsureValidToken() error {
 
 func refreshIfNeeded(credsPath string) error {
 	root, oauth, refreshToken, expiresAt, err := loadTokenState(credsPath)
-	if err != nil || refreshToken == "" {
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("claude/auth: load credentials: %v", err)
+		}
+		return nil
+	}
+	if refreshToken == "" {
 		return nil
 	}
 
@@ -103,7 +109,10 @@ func performRefresh(credsPath string, root, oauth map[string]json.RawMessage, re
 	setRawField(oauth, "refreshToken", newTokens.RefreshToken)
 	setRawField(oauth, "expiresAt", newExpiry)
 
-	updatedOAuth, _ := json.Marshal(oauth)
+	updatedOAuth, err := json.Marshal(oauth)
+	if err != nil {
+		return fmt.Errorf("claude/auth: marshal oauth: %w", err)
+	}
 	root["claudeAiOauth"] = updatedOAuth
 
 	if err := atomicWriteJSON(credsPath, root); err != nil {
@@ -129,7 +138,11 @@ func extractTokenInfo(oauth map[string]json.RawMessage) (refreshToken string, ex
 }
 
 func setRawField(m map[string]json.RawMessage, key string, value any) {
-	data, _ := json.Marshal(value)
+	data, err := json.Marshal(value)
+	if err != nil {
+		log.Printf("claude/auth: marshal field %s: %v", key, err)
+		return
+	}
 	m[key] = data
 }
 
@@ -158,7 +171,14 @@ func atomicWriteJSON(path string, data map[string]json.RawMessage) error {
 		return err
 	}
 
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		// Rename fails on Docker bind-mounted files (EBUSY/EXDEV).
+		// Fall back to direct write and clean up the temp file.
+		_ = os.Remove(tmp)
+		return os.WriteFile(path, content, 0o600)
+	}
+
+	return nil
 }
 
 func defaultCredentialsPath() (string, error) {
