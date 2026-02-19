@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,12 +45,13 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 	}
 
 	msg := update.Message
-	text, att := messageContent(msg)
 
-	if att == nil && msg.ReplyToMessage != nil {
-		att = extractAttachment(msg.ReplyToMessage)
+	if !isChatAllowed(msg.Chat.ID) {
+		log.Printf("handler: ignoring message from non-whitelisted chat=%d", msg.Chat.ID)
+		return
 	}
 
+	text, att := resolveContent(msg)
 	if text == "" && att == nil {
 		log.Printf("handler: skipping update (no text or attachment)")
 		return
@@ -78,6 +80,15 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 	if reply != "" {
 		sendReply(parentCtx, b, chatID, threadID, reply)
 	}
+}
+
+// resolveContent extracts text and attachment from a message, falling back to reply attachment.
+func resolveContent(msg *models.Message) (string, *attachment) {
+	text, att := messageContent(msg)
+	if att == nil && msg.ReplyToMessage != nil {
+		att = extractAttachment(msg.ReplyToMessage)
+	}
+	return text, att
 }
 
 // withReplyContext prepends the original message text when the user replies to a message.
@@ -161,6 +172,10 @@ func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {
 		case <-time.After(4 * time.Second):
 		}
 	}
+}
+
+func isChatAllowed(chatID int64) bool {
+	return slices.Contains(config.WhitelistChatIDs(), chatID)
 }
 
 func chatDir(chatID int64, threadID int) string {
