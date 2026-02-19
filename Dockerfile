@@ -23,11 +23,17 @@ RUN apk add --no-cache \
     nss \
     freetype \
     ttf-freefont \
-    font-noto-emoji
+    font-noto-emoji \
+    python3 \
+    py3-pip \
+    pipx
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV IS_SANDBOX=1
+
+# Install uv (provides uv and uvx)
+RUN curl -LsSf https://astral.sh/uv/install.sh | bash
 
 # Install Claude Code (native install, auto-updates)
 RUN curl -fsSL https://claude.ai/install.sh | bash
@@ -36,8 +42,9 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN npm install -g agent-browser
 
 # Install Claude Code skills
-RUN npx -y skills add https://github.com/vercel-labs/skills --skill find-skills && \
-    npx -y skills add https://github.com/anthropics/skills --skill skill-creator
+RUN npx -y skills add https://github.com/vercel-labs/skills --skill find-skills -g -y && \
+    npx -y skills add https://github.com/anthropics/skills --skill skill-creator -g -y && \
+    npx -y skills add https://github.com/vercel-labs/agent-browser --skill agent-browser -g -y
 
 # Install Go (copy from builder)
 COPY --from=builder /usr/local/go /usr/local/go
