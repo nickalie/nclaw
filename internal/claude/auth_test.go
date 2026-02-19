@@ -27,6 +27,13 @@ func withTestTokenURL(t *testing.T, url string) {
 	t.Cleanup(func() { tokenURLVal = orig })
 }
 
+func resetBackoff(t *testing.T) {
+	t.Helper()
+	orig := lastRefreshFail
+	lastRefreshFail = time.Time{}
+	t.Cleanup(func() { lastRefreshFail = orig })
+}
+
 func writeTestCreds(t *testing.T, path string, data map[string]any) {
 	t.Helper()
 	content, err := json.Marshal(data)
@@ -131,6 +138,7 @@ func TestEnsureValidToken_EmptyTokensFromServer(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, credentialFile)
 	withTestCredPath(t, path)
+	resetBackoff(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(tokenRefreshResponse{})
@@ -155,6 +163,7 @@ func TestEnsureValidToken_ZeroExpiresIn(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, credentialFile)
 	withTestCredPath(t, path)
+	resetBackoff(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(tokenRefreshResponse{
@@ -241,6 +250,40 @@ func TestReadJSONFile_InvalidJSON(t *testing.T) {
 
 	_, err := readJSONFile(path)
 	assert.Error(t, err)
+}
+
+func TestEnsureValidToken_BackoffAfterFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, credentialFile)
+	withTestCredPath(t, path)
+	resetBackoff(t)
+
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"invalid_grant"}`))
+	}))
+	defer server.Close()
+	withTestTokenURL(t, server.URL)
+
+	writeTestCreds(t, path, map[string]any{
+		"claudeAiOauth": map[string]any{
+			"accessToken":  "old",
+			"refreshToken": "old-refresh",
+			"expiresAt":    time.Now().Add(-time.Minute).UnixMilli(),
+		},
+	})
+
+	// First call should attempt refresh and fail
+	err := EnsureValidToken()
+	assert.Error(t, err)
+	assert.Equal(t, 1, callCount)
+
+	// Second call should be skipped due to backoff
+	err = EnsureValidToken()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, callCount)
 }
 
 func TestAtomicWriteJSON(t *testing.T) {

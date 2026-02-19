@@ -18,14 +18,16 @@ const (
 	clientID        = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 	refreshMargin   = 5 * time.Minute
 	credentialFile  = ".credentials.json"
+	refreshBackoff  = 60 * time.Second
 )
 
 var (
-	refreshMu     sync.Mutex
-	tokenURLVal   = defaultTokenURL
-	credPathFunc  = defaultCredentialsPath
-	httpClient    = &http.Client{Timeout: 15 * time.Second}
-	errNoOAuthKey = errors.New("no claudeAiOauth key")
+	refreshMu       sync.Mutex
+	tokenURLVal     = defaultTokenURL
+	credPathFunc    = defaultCredentialsPath
+	httpClient      = &http.Client{Timeout: 15 * time.Second}
+	errNoOAuthKey   = errors.New("no claudeAiOauth key")
+	lastRefreshFail time.Time
 )
 
 type tokenRefreshRequest struct {
@@ -71,10 +73,23 @@ func refreshIfNeeded(credsPath string) error {
 		return nil
 	}
 
+	if inBackoff() {
+		return nil
+	}
+
 	log.Printf("claude/auth: token expires at %s, refreshing...",
 		time.UnixMilli(expiresAt).Format(time.RFC3339))
 
-	return performRefresh(credsPath, root, oauth, refreshToken)
+	if err := performRefresh(credsPath, root, oauth, refreshToken); err != nil {
+		lastRefreshFail = time.Now()
+		return err
+	}
+	lastRefreshFail = time.Time{}
+	return nil
+}
+
+func inBackoff() bool {
+	return !lastRefreshFail.IsZero() && time.Since(lastRefreshFail) < refreshBackoff
 }
 
 func loadTokenState(path string) (root, oauth map[string]json.RawMessage, refreshToken string, expiresAt int64, err error) {
