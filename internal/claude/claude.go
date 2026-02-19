@@ -192,7 +192,7 @@ func (c *Claude) Ask(query string) (string, error) {
 	c.prepare("-p")
 
 	if err := c.bin.Run(query); err != nil {
-		return "", fmt.Errorf("claude: %w: %s", err, string(c.bin.StdErr()))
+		return strings.TrimSpace(string(c.bin.CombinedOutput())), fmt.Errorf("claude: %w", err)
 	}
 
 	return strings.TrimSpace(string(c.bin.StdOut())), nil
@@ -203,7 +203,7 @@ func (c *Claude) Continue(query string) (string, error) {
 	c.prepare("-c", "-p")
 
 	if err := c.bin.Run(query); err != nil {
-		return "", fmt.Errorf("claude: %w: %s", err, string(c.bin.StdErr()))
+		return strings.TrimSpace(string(c.bin.CombinedOutput())), fmt.Errorf("claude: %w", err)
 	}
 
 	return strings.TrimSpace(string(c.bin.StdOut())), nil
@@ -214,7 +214,7 @@ func (c *Claude) Resume(session, query string) (string, error) {
 	c.prepare("-r", session, "-p")
 
 	if err := c.bin.Run(query); err != nil {
-		return "", fmt.Errorf("claude: %w: %s", err, string(c.bin.StdErr()))
+		return strings.TrimSpace(string(c.bin.CombinedOutput())), fmt.Errorf("claude: %w", err)
 	}
 
 	return strings.TrimSpace(string(c.bin.StdOut())), nil
@@ -225,7 +225,7 @@ func (c *Claude) Version() (string, error) {
 	c.bin.Reset()
 
 	if err := c.bin.Run("--version"); err != nil {
-		return "", fmt.Errorf("claude: %w: %s", err, string(c.bin.StdErr()))
+		return strings.TrimSpace(string(c.bin.CombinedOutput())), fmt.Errorf("claude: %w", err)
 	}
 
 	return strings.TrimSpace(string(c.bin.StdOut())), nil

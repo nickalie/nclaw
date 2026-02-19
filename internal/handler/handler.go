@@ -150,7 +150,9 @@ func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) str
 
 	if err != nil {
 		log.Printf("handler: claude error: %v", err)
-		reply = "error: " + err.Error()
+		if reply == "" {
+			reply = "error: " + err.Error()
+		}
 	}
 
 	return h.Scheduler.ProcessReply(reply, chatID, threadID)
