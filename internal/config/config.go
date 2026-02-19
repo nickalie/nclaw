@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -56,8 +57,13 @@ func WhitelistChatIDs() []int64 {
 	var ids []int64
 	for _, s := range strings.Split(raw, ",") {
 		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
 		if id, err := strconv.ParseInt(s, 10, 64); err == nil {
 			ids = append(ids, id)
+		} else {
+			log.Printf("config: ignoring invalid whitelist chat ID %q: %v", s, err)
 		}
 	}
 	return ids

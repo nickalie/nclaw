@@ -57,7 +57,12 @@ func UpdateTaskAfterRun(database *gorm.DB, id string, nextRun *time.Time, lastRe
 	return database.Model(&model.ScheduledTask{}).Where("id = ?", id).Updates(updates).Error
 }
 
-// DeleteTask removes a task and its run logs (via CASCADE).
+// DeleteTask removes a task and its run logs.
 func DeleteTask(database *gorm.DB, id string) error {
-	return database.Where("id = ?", id).Delete(&model.ScheduledTask{}).Error
+	return database.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("task_id = ?", id).Delete(&model.TaskRunLog{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", id).Delete(&model.ScheduledTask{}).Error
+	})
 }

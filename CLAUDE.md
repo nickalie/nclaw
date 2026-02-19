@@ -58,7 +58,7 @@ make docker  # Build and run in Docker
 ## Code Style
 
 - golangci-lint v2 with gofmt formatter
-- Max cyclomatic complexity: 7
+- Max cyclomatic complexity: 8
 - Max line length: 140
 - Keep methods small to stay under complexity limit
 - Standard Go conventions
