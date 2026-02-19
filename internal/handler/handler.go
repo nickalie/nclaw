@@ -145,6 +145,10 @@ func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) str
 	taskPrompt := h.Scheduler.FormatTaskList(chatID, threadID)
 	systemPrompt := telegramPrompt + "\n\n" + taskPrompt
 
+	if err := claude.EnsureValidToken(); err != nil {
+		log.Printf("handler: token refresh warning: %v", err)
+	}
+
 	log.Printf("handler: calling claude.Continue in dir=%s", dir)
 	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(systemPrompt).Continue(prompt)
 
