@@ -13,53 +13,142 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReadCredentials(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, credentialFile)
-
-	creds := &credentialsFile{
-		ClaudeAiOauth: &oauthTokens{
-			AccessToken:  "access",
-			RefreshToken: "refresh",
-			ExpiresAt:    time.Now().Add(time.Hour).UnixMilli(),
-			Scopes:       []string{"user:inference"},
-		},
-	}
-
-	data, err := json.Marshal(creds)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(path, data, 0o600))
-
-	got, err := readCredentials(path)
-	require.NoError(t, err)
-	assert.Equal(t, "access", got.ClaudeAiOauth.AccessToken)
-	assert.Equal(t, "refresh", got.ClaudeAiOauth.RefreshToken)
+func withTestCredPath(t *testing.T, path string) {
+	t.Helper()
+	orig := credPathFunc
+	credPathFunc = func() (string, error) { return path, nil }
+	t.Cleanup(func() { credPathFunc = orig })
 }
 
-func TestWriteCredentials(t *testing.T) {
+func withTestTokenURL(t *testing.T, url string) {
+	t.Helper()
+	orig := tokenURLVal
+	tokenURLVal = url
+	t.Cleanup(func() { tokenURLVal = orig })
+}
+
+func writeTestCreds(t *testing.T, path string, data map[string]any) {
+	t.Helper()
+	content, err := json.Marshal(data)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, content, 0o600))
+}
+
+func TestEnsureValidToken_NoCredentialsFile(t *testing.T) {
+	withTestCredPath(t, filepath.Join(t.TempDir(), "nonexistent.json"))
+	require.NoError(t, EnsureValidToken())
+}
+
+func TestEnsureValidToken_TokenStillValid(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, credentialFile)
+	withTestCredPath(t, path)
 
-	creds := &credentialsFile{
-		ClaudeAiOauth: &oauthTokens{
+	writeTestCreds(t, path, map[string]any{
+		"claudeAiOauth": map[string]any{
+			"accessToken":  "valid-token",
+			"refreshToken": "refresh-token",
+			"expiresAt":    time.Now().Add(time.Hour).UnixMilli(),
+		},
+	})
+
+	require.NoError(t, EnsureValidToken())
+}
+
+func TestEnsureValidToken_RefreshesExpiredToken(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, credentialFile)
+	withTestCredPath(t, path)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req tokenRefreshRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.Equal(t, "old-refresh", req.RefreshToken)
+		assert.Equal(t, clientID, req.ClientID)
+
+		json.NewEncoder(w).Encode(tokenRefreshResponse{
 			AccessToken:  "new-access",
 			RefreshToken: "new-refresh",
-			ExpiresAt:    1234567890000,
-			Scopes:       []string{"user:inference"},
+			ExpiresIn:    3600,
+		})
+	}))
+	defer server.Close()
+	withTestTokenURL(t, server.URL)
+
+	writeTestCreds(t, path, map[string]any{
+		"claudeAiOauth": map[string]any{
+			"accessToken":  "old-access",
+			"refreshToken": "old-refresh",
+			"expiresAt":    time.Now().Add(-time.Minute).UnixMilli(),
+			"unknownField": "should-stay",
 		},
-	}
+		"extraTopLevel": "preserved",
+	})
 
-	require.NoError(t, writeCredentials(path, creds))
+	require.NoError(t, EnsureValidToken())
 
-	got, err := readCredentials(path)
+	// Verify credentials file was updated and unknown fields preserved
+	updated, err := readJSONFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, "new-access", got.ClaudeAiOauth.AccessToken)
-	assert.Equal(t, "new-refresh", got.ClaudeAiOauth.RefreshToken)
 
-	// Check file permissions
-	info, err := os.Stat(path)
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	var extraField string
+	require.NoError(t, json.Unmarshal(updated["extraTopLevel"], &extraField))
+	assert.Equal(t, "preserved", extraField)
+
+	var oauth map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(updated["claudeAiOauth"], &oauth))
+
+	var accessToken string
+	require.NoError(t, json.Unmarshal(oauth["accessToken"], &accessToken))
+	assert.Equal(t, "new-access", accessToken)
+
+	var refreshToken string
+	require.NoError(t, json.Unmarshal(oauth["refreshToken"], &refreshToken))
+	assert.Equal(t, "new-refresh", refreshToken)
+
+	// Verify unknown oauth field preserved
+	var unknownField string
+	require.NoError(t, json.Unmarshal(oauth["unknownField"], &unknownField))
+	assert.Equal(t, "should-stay", unknownField)
+}
+
+func TestEnsureValidToken_NoRefreshToken(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, credentialFile)
+	withTestCredPath(t, path)
+
+	writeTestCreds(t, path, map[string]any{
+		"claudeAiOauth": map[string]any{
+			"accessToken": "token",
+			"expiresAt":   time.Now().Add(-time.Minute).UnixMilli(),
+		},
+	})
+
+	require.NoError(t, EnsureValidToken())
+}
+
+func TestEnsureValidToken_EmptyTokensFromServer(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, credentialFile)
+	withTestCredPath(t, path)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(tokenRefreshResponse{})
+	}))
+	defer server.Close()
+	withTestTokenURL(t, server.URL)
+
+	writeTestCreds(t, path, map[string]any{
+		"claudeAiOauth": map[string]any{
+			"accessToken":  "old",
+			"refreshToken": "old-refresh",
+			"expiresAt":    time.Now().Add(-time.Minute).UnixMilli(),
+		},
+	})
+
+	err := EnsureValidToken()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty tokens")
 }
 
 func TestRefreshAccessToken_Success(t *testing.T) {
@@ -68,11 +157,11 @@ func TestRefreshAccessToken_Success(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		var req tokenRefreshRequest
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.Equal(t, "refresh_token", req.GrantType)
 		assert.Equal(t, "my-refresh-token", req.RefreshToken)
+		assert.Equal(t, clientID, req.ClientID)
 
-		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(tokenRefreshResponse{
 			AccessToken:  "new-access",
 			RefreshToken: "new-refresh",
@@ -80,11 +169,7 @@ func TestRefreshAccessToken_Success(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-
-	// Temporarily override the token URL for testing
-	origURL := tokenURLVal
-	defer func() { setTokenURL(origURL) }()
-	setTokenURL(server.URL)
+	withTestTokenURL(t, server.URL)
 
 	tokens, err := refreshAccessToken("my-refresh-token")
 	require.NoError(t, err)
@@ -99,12 +184,57 @@ func TestRefreshAccessToken_Error(t *testing.T) {
 		w.Write([]byte(`{"error":"invalid_grant"}`))
 	}))
 	defer server.Close()
-
-	origURL := tokenURLVal
-	defer func() { setTokenURL(origURL) }()
-	setTokenURL(server.URL)
+	withTestTokenURL(t, server.URL)
 
 	_, err := refreshAccessToken("bad-token")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
+}
+
+func TestReadJSONFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.json")
+	content := `{"claudeAiOauth":{"accessToken":"tok","unknownField":"val"},"otherKey":"other"}`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	got, err := readJSONFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, got, "claudeAiOauth")
+	assert.Contains(t, got, "otherKey")
+}
+
+func TestReadJSONFile_Nonexistent(t *testing.T) {
+	_, err := readJSONFile(filepath.Join(t.TempDir(), "nonexistent.json"))
+	assert.Error(t, err)
+}
+
+func TestReadJSONFile_InvalidJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bad.json")
+	require.NoError(t, os.WriteFile(path, []byte("not json"), 0o600))
+
+	_, err := readJSONFile(path)
+	assert.Error(t, err)
+}
+
+func TestAtomicWriteJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.json")
+
+	data := map[string]json.RawMessage{
+		"key": json.RawMessage(`"value"`),
+	}
+	require.NoError(t, atomicWriteJSON(path, data))
+
+	got, err := readJSONFile(path)
+	require.NoError(t, err)
+	var val string
+	require.NoError(t, json.Unmarshal(got["key"], &val))
+	assert.Equal(t, "value", val)
+
+	// Verify no temp file left behind
+	_, err = os.Stat(path + ".tmp")
+	assert.True(t, os.IsNotExist(err))
+
+	// Check file permissions
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }

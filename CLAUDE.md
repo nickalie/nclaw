@@ -14,7 +14,7 @@ Telegram -> Handler -> Claude Code CLI (via go-binwrapper) -> Telegram
 - `cmd/nclaw/main.go` - Entrypoint: config init, DB setup, bot creation, scheduler start
 - `internal/config/` - Viper-based config (env prefix `NCLAW_`, `.env` support, optional `config.yaml`)
 - `internal/handler/` - Telegram message handling, file attachments, reply context, sendfile processing
-- `internal/claude/` - Claude Code CLI wrapper using `go-binwrapper` (fluent builder API)
+- `internal/claude/` - Claude Code CLI wrapper using `go-binwrapper` (fluent builder API), plus OAuth token refresh
 - `internal/model/` - GORM models: `ScheduledTask`, `TaskRunLog`
 - `internal/db/` - Database operations (SQLite with WAL mode)
 - `internal/scheduler/` - Task scheduling via `gocron`, command parsing from Claude replies
@@ -24,6 +24,9 @@ Telegram -> Handler -> Claude Code CLI (via go-binwrapper) -> Telegram
 
 ### Claude CLI Integration
 The `claude` package wraps the CLI binary with a fluent builder. The handler calls `claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(prompt).Continue(query)` to continue the session in a per-chat directory.
+
+### OAuth Token Refresh
+Before each CLI invocation (in handler and scheduler), `claude.EnsureValidToken()` proactively refreshes the OAuth token if it expires within 5 minutes. Credentials are read from `~/.claude/.credentials.json` using field-preserving JSON round-tripping. Refresh failures are logged as warnings and do not block the CLI call.
 
 ### Scheduled Tasks
 Claude's replies are scanned for `nclaw:schedule` code blocks containing JSON commands (`create`, `pause`, `resume`, `cancel`). Tasks support cron, interval, and one-time schedules. Tasks persist in SQLite and reload on startup.

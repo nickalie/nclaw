@@ -20,22 +20,11 @@ const (
 )
 
 var (
-	refreshMu   sync.Mutex
-	tokenURLVal = defaultTokenURL
+	refreshMu    sync.Mutex
+	tokenURLVal  = defaultTokenURL
+	credPathFunc = defaultCredentialsPath
+	httpClient   = &http.Client{Timeout: 15 * time.Second}
 )
-
-type oauthTokens struct {
-	AccessToken      string   `json:"accessToken"`
-	RefreshToken     string   `json:"refreshToken"`
-	ExpiresAt        int64    `json:"expiresAt"`
-	Scopes           []string `json:"scopes"`
-	SubscriptionType *string  `json:"subscriptionType"`
-	RateLimitTier    *string  `json:"rateLimitTier"`
-}
-
-type credentialsFile struct {
-	ClaudeAiOauth *oauthTokens `json:"claudeAiOauth"`
-}
 
 type tokenRefreshRequest struct {
 	GrantType    string `json:"grant_type"`
@@ -48,87 +37,137 @@ type tokenRefreshResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int64  `json:"expires_in"`
-	Scope        string `json:"scope"`
 }
 
 // EnsureValidToken checks if the OAuth token is about to expire and refreshes it if needed.
-// It returns nil if no refresh was needed or the refresh succeeded.
 func EnsureValidToken() error {
 	refreshMu.Lock()
 	defer refreshMu.Unlock()
 
-	credsPath := credentialsPath()
-	if credsPath == "" {
+	credsPath, err := credPathFunc()
+	if err != nil {
+		log.Printf("claude/auth: credentials path: %v", err)
 		return nil
 	}
 
-	creds, err := readCredentials(credsPath)
+	return refreshIfNeeded(credsPath)
+}
+
+func refreshIfNeeded(credsPath string) error {
+	root, oauth, refreshToken, expiresAt, err := loadTokenState(credsPath)
+	if err != nil || refreshToken == "" {
+		return nil
+	}
+
+	if time.Until(time.UnixMilli(expiresAt)) > refreshMargin {
+		return nil
+	}
+
+	log.Printf("claude/auth: token expires at %s, refreshing...",
+		time.UnixMilli(expiresAt).Format(time.RFC3339))
+
+	return performRefresh(credsPath, root, oauth, refreshToken)
+}
+
+func loadTokenState(path string) (root, oauth map[string]json.RawMessage, refreshToken string, expiresAt int64, err error) {
+	root, err = readJSONFile(path)
 	if err != nil {
-		return nil // no credentials file, let CLI handle auth
+		return nil, nil, "", 0, err
 	}
 
-	oauth := creds.ClaudeAiOauth
-	if oauth == nil || oauth.RefreshToken == "" {
-		return nil // no OAuth tokens or no refresh token
+	oauthRaw, ok := root["claudeAiOauth"]
+	if !ok {
+		return nil, nil, "", 0, fmt.Errorf("no claudeAiOauth key")
 	}
 
-	expiresAt := time.UnixMilli(oauth.ExpiresAt)
-	if time.Until(expiresAt) > refreshMargin {
-		return nil // token still valid
+	if err = json.Unmarshal(oauthRaw, &oauth); err != nil {
+		return nil, nil, "", 0, err
 	}
 
-	log.Printf("claude/auth: token expires at %s, refreshing...", expiresAt.Format(time.RFC3339))
+	refreshToken, expiresAt = extractTokenInfo(oauth)
+	return root, oauth, refreshToken, expiresAt, nil
+}
 
-	newTokens, err := refreshAccessToken(oauth.RefreshToken)
+func performRefresh(credsPath string, root, oauth map[string]json.RawMessage, refreshToken string) error {
+	newTokens, err := refreshAccessToken(refreshToken)
 	if err != nil {
 		return fmt.Errorf("claude/auth: refresh failed: %w", err)
 	}
 
-	oauth.AccessToken = newTokens.AccessToken
-	oauth.RefreshToken = newTokens.RefreshToken
-	oauth.ExpiresAt = time.Now().Add(time.Duration(newTokens.ExpiresIn) * time.Second).UnixMilli()
+	if newTokens.AccessToken == "" || newTokens.RefreshToken == "" {
+		return fmt.Errorf("claude/auth: refresh returned empty tokens")
+	}
 
-	if err := writeCredentials(credsPath, creds); err != nil {
+	newExpiry := time.Now().Add(time.Duration(newTokens.ExpiresIn) * time.Second).UnixMilli()
+	setRawField(oauth, "accessToken", newTokens.AccessToken)
+	setRawField(oauth, "refreshToken", newTokens.RefreshToken)
+	setRawField(oauth, "expiresAt", newExpiry)
+
+	updatedOAuth, _ := json.Marshal(oauth)
+	root["claudeAiOauth"] = updatedOAuth
+
+	if err := atomicWriteJSON(credsPath, root); err != nil {
 		return fmt.Errorf("claude/auth: write credentials: %w", err)
 	}
 
 	log.Printf("claude/auth: token refreshed, new expiry: %s",
-		time.UnixMilli(oauth.ExpiresAt).Format(time.RFC3339))
+		time.UnixMilli(newExpiry).Format(time.RFC3339))
 
 	return nil
 }
 
-func credentialsPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+func extractTokenInfo(oauth map[string]json.RawMessage) (refreshToken string, expiresAt int64) {
+	if raw, ok := oauth["refreshToken"]; ok {
+		_ = json.Unmarshal(raw, &refreshToken)
 	}
-	return filepath.Join(home, ".claude", credentialFile)
+
+	if raw, ok := oauth["expiresAt"]; ok {
+		_ = json.Unmarshal(raw, &expiresAt)
+	}
+
+	return refreshToken, expiresAt
 }
 
-func readCredentials(path string) (*credentialsFile, error) {
+func setRawField(m map[string]json.RawMessage, key string, value any) {
+	data, _ := json.Marshal(value)
+	m[key] = data
+}
+
+func readJSONFile(path string) (map[string]json.RawMessage, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var creds credentialsFile
-	if err := json.Unmarshal(data, &creds); err != nil {
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, err
 	}
 
-	return &creds, nil
+	return result, nil
 }
 
-func writeCredentials(path string, creds *credentialsFile) error {
-	data, err := json.Marshal(creds)
+func atomicWriteJSON(path string, data map[string]json.RawMessage) error {
+	content, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, content, 0o600); err != nil {
+		return err
+	}
+
+	return os.Rename(tmp, path)
 }
 
-func setTokenURL(url string) { tokenURLVal = url }
+func defaultCredentialsPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("home dir: %w", err)
+	}
+	return filepath.Join(home, ".claude", credentialFile), nil
+}
 
 func refreshAccessToken(refreshToken string) (*tokenRefreshResponse, error) {
 	reqBody := tokenRefreshRequest{
@@ -143,7 +182,7 @@ func refreshAccessToken(refreshToken string) (*tokenRefreshResponse, error) {
 		return nil, err
 	}
 
-	resp, err := http.Post(tokenURLVal, "application/json", bytes.NewReader(body))
+	resp, err := httpClient.Post(tokenURLVal, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("POST %s: %w", tokenURLVal, err)
 	}
