@@ -56,7 +56,7 @@ func EnsureValidToken() error {
 func refreshIfNeeded(credsPath string) error {
 	root, oauth, refreshToken, expiresAt, err := loadTokenState(credsPath)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !os.IsNotExist(err) && err.Error() != "no claudeAiOauth key" {
 			log.Printf("claude/auth: load credentials: %v", err)
 		}
 		return nil
@@ -102,6 +102,10 @@ func performRefresh(credsPath string, root, oauth map[string]json.RawMessage, re
 
 	if newTokens.AccessToken == "" || newTokens.RefreshToken == "" {
 		return fmt.Errorf("claude/auth: refresh returned empty tokens")
+	}
+
+	if newTokens.ExpiresIn <= 0 {
+		return fmt.Errorf("claude/auth: refresh returned non-positive expires_in: %d", newTokens.ExpiresIn)
 	}
 
 	newExpiry := time.Now().Add(time.Duration(newTokens.ExpiresIn) * time.Second).UnixMilli()

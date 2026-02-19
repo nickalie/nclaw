@@ -151,6 +151,34 @@ func TestEnsureValidToken_EmptyTokensFromServer(t *testing.T) {
 	assert.Contains(t, err.Error(), "empty tokens")
 }
 
+func TestEnsureValidToken_ZeroExpiresIn(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, credentialFile)
+	withTestCredPath(t, path)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(tokenRefreshResponse{
+			AccessToken:  "new-access",
+			RefreshToken: "new-refresh",
+			ExpiresIn:    0,
+		})
+	}))
+	defer server.Close()
+	withTestTokenURL(t, server.URL)
+
+	writeTestCreds(t, path, map[string]any{
+		"claudeAiOauth": map[string]any{
+			"accessToken":  "old",
+			"refreshToken": "old-refresh",
+			"expiresAt":    time.Now().Add(-time.Minute).UnixMilli(),
+		},
+	})
+
+	err := EnsureValidToken()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "non-positive expires_in")
+}
+
 func TestRefreshAccessToken_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
