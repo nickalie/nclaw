@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-telegram/bot"
@@ -15,6 +16,21 @@ import (
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/scheduler"
 )
+
+const telegramPrompt = `IMPORTANT: Your output will be displayed in Telegram.
+Format all responses using Telegram HTML. Supported tags:
+<b>bold</b>, <i>italic</i>, <u>underline</u>, <s>strikethrough</s>,
+<code>inline code</code>, <pre>code block</pre>, <pre><code class="language-go">code with language</code></pre>,
+<a href="URL">link</a>, <blockquote>quote</blockquote>, <tg-spoiler>spoiler</tg-spoiler>
+
+Rules:
+- Do NOT use Markdown syntax (no #headers, no **bold**, no backticks for code)
+- Use ONLY the HTML tags listed above. No other HTML tags are supported.
+- Escape &, < and > in regular text as &amp; &lt; &gt; (but not inside tags themselves)
+- Do NOT use <p>, <br>, <div>, <h1>-<h6>, <ul>, <li>, <ol>, <table>, or any other HTML tags
+- For lists, use plain text with bullet characters or numbers
+- For section titles, use <b>bold text</b> on its own line
+- Keep formatting minimal and clean`
 
 // Handler processes incoming Telegram messages.
 type Handler struct {
@@ -116,9 +132,10 @@ func buildPrompt(ctx context.Context, b *bot.Bot, text string, att *attachment, 
 
 func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) string {
 	taskPrompt := h.Scheduler.FormatTaskList(chatID, threadID)
+	systemPrompt := telegramPrompt + "\n\n" + taskPrompt
 
 	log.Printf("handler: calling claude.Continue in dir=%s", dir)
-	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(taskPrompt).Continue(prompt)
+	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(systemPrompt).Continue(prompt)
 
 	if err != nil {
 		log.Printf("handler: claude error: %v", err)
@@ -160,10 +177,18 @@ func ensureDir(dir string) {
 	}
 }
 
+const maxMessageLen = 4096
+
 func sendReply(ctx context.Context, b *bot.Bot, chatID int64, threadID int, text string) {
 	log.Printf("handler: sending reply len=%d", len(text))
 
-	modes := []models.ParseMode{models.ParseModeMarkdown, models.ParseModeMarkdownV1, ""}
+	for _, chunk := range splitMessage(text, maxMessageLen) {
+		sendChunk(ctx, b, chatID, threadID, chunk)
+	}
+}
+
+func sendChunk(ctx context.Context, b *bot.Bot, chatID int64, threadID int, text string) {
+	modes := []models.ParseMode{models.ParseModeHTML, ""}
 	for _, mode := range modes {
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:          chatID,
@@ -176,4 +201,30 @@ func sendReply(ctx context.Context, b *bot.Bot, chatID int64, threadID int, text
 		}
 		log.Printf("handler: SendMessage parseMode=%q error: %v", mode, err)
 	}
+}
+
+// splitMessage splits text into chunks of at most maxLen characters, breaking at newlines.
+func splitMessage(text string, maxLen int) []string {
+	if len(text) <= maxLen {
+		return []string{text}
+	}
+
+	var chunks []string
+
+	for text != "" {
+		if len(text) <= maxLen {
+			chunks = append(chunks, text)
+			break
+		}
+
+		cut := strings.LastIndex(text[:maxLen], "\n")
+		if cut <= 0 {
+			cut = maxLen
+		}
+
+		chunks = append(chunks, text[:cut])
+		text = strings.TrimLeft(text[cut:], "\n")
+	}
+
+	return chunks
 }
