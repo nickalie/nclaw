@@ -101,9 +101,20 @@ func (s *Scheduler) CreateTask(task *model.ScheduledTask) error {
 
 // PauseTask pauses a task by removing it from gocron and updating status.
 func (s *Scheduler) PauseTask(id string) error {
+	task, err := db.GetTask(s.db, id)
+	if err != nil {
+		return fmt.Errorf("scheduler: get task: %w", err)
+	}
+	if task.Status != model.StatusActive {
+		return fmt.Errorf("scheduler: task %s is %s, not active", id, task.Status)
+	}
+
+	if err := db.UpdateTaskStatus(s.db, id, model.StatusPaused); err != nil {
+		return err
+	}
 	s.removeJob(id)
 	log.Printf("scheduler: paused task %s", id)
-	return db.UpdateTaskStatus(s.db, id, model.StatusPaused)
+	return nil
 }
 
 // ResumeTask resumes a paused task.
@@ -133,9 +144,12 @@ func (s *Scheduler) ResumeTask(id string) error {
 
 // CancelTask deletes a task entirely.
 func (s *Scheduler) CancelTask(id string) error {
+	if err := db.DeleteTask(s.db, id); err != nil {
+		return fmt.Errorf("scheduler: delete task: %w", err)
+	}
 	s.removeJob(id)
 	log.Printf("scheduler: canceled task %s", id)
-	return db.DeleteTask(s.db, id)
+	return nil
 }
 
 // addJob creates a gocron job for the given task.
