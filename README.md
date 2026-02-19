@@ -63,12 +63,15 @@ Tasks persist across restarts. Each task can either continue the existing chat s
 
 ## Skills
 
-Two skills ship with nclaw:
+Five skills ship with nclaw:
 
-| Skill | Purpose |
-|---|---|
-| `schedule` | Create and manage scheduled tasks via natural language |
-| `send-file` | Send generated files back to the user via Telegram |
+| Skill | Source | Purpose |
+|---|---|---|
+| `schedule` | Custom | Create and manage scheduled tasks via natural language |
+| `send-file` | Custom | Send generated files back to the user via Telegram |
+| `find-skills` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Discover and install additional agent skills |
+| `skill-creator` | [anthropics/skills](https://github.com/anthropics/skills) | Guide for creating new custom skills |
+| `agent-browser` | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) | Browse the web using system Chromium |
 
 ## Development
 
