@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/go-telegram/bot"
 
@@ -13,6 +13,7 @@ import (
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/handler"
 	"github.com/nickalie/nclaw/internal/scheduler"
+	"github.com/nickalie/nclaw/internal/version"
 )
 
 func main() {
@@ -51,8 +52,30 @@ func main() {
 	defer cancel()
 	defer sched.Shutdown()
 
-	fmt.Println("nclaw bot started")
+	log.Printf("nclaw bot started (%s)", version.String())
+	sendStartupNotifications(b)
 	b.Start(ctx)
+}
+
+func sendStartupNotifications(b *bot.Bot) {
+	chatIDs := config.WhitelistChatIDs()
+	if len(chatIDs) == 0 {
+		return
+	}
+
+	text := "nclaw bot started\n" + version.String()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	for _, chatID := range chatIDs {
+		if _, err := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatID,
+			Text:   text,
+		}); err != nil {
+			log.Printf("startup notify chat %d: %v", chatID, err)
+		}
+	}
 }
 
 func newSendFunc(b *bot.Bot) scheduler.SendFunc {

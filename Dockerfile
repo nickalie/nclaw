@@ -5,7 +5,18 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o nclaw ./cmd/nclaw
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+ARG BUILD_NUMBER=
+ARG DOCKER_TAG=
+RUN go build -ldflags "\
+    -X github.com/nickalie/nclaw/internal/version.Version=${VERSION} \
+    -X github.com/nickalie/nclaw/internal/version.Commit=${COMMIT} \
+    -X github.com/nickalie/nclaw/internal/version.BuildDate=${BUILD_DATE} \
+    -X github.com/nickalie/nclaw/internal/version.BuildNumber=${BUILD_NUMBER} \
+    -X github.com/nickalie/nclaw/internal/version.DockerTag=${DOCKER_TAG}" \
+    -o nclaw ./cmd/nclaw
 
 FROM node:24-alpine
 
