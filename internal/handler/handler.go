@@ -57,6 +57,10 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 		return
 	}
 
+	go h.processMessage(parentCtx, b, msg, text, att)
+}
+
+func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Message, text string, att *attachment) {
 	text = withReplyContext(msg, text)
 
 	chatID := msg.Chat.ID
@@ -64,21 +68,21 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 	dir := chatDir(chatID, threadID)
 	ensureDir(dir)
 
-	typingCtx, stopTyping := context.WithCancel(parentCtx)
+	typingCtx, stopTyping := context.WithCancel(ctx)
 	defer stopTyping()
 
 	go sendTyping(typingCtx, b, chatID, threadID)
 
-	prompt := buildPrompt(parentCtx, b, text, att, dir)
+	prompt := buildPrompt(ctx, b, text, att, dir)
 	log.Printf("handler: received message from chat=%d thread=%d text=%q hasFile=%v", chatID, threadID, text, att != nil)
 
 	reply := h.callClaude(dir, prompt, chatID, threadID)
 	stopTyping()
 
-	reply = processSendFiles(parentCtx, b, reply, chatID, threadID, dir)
+	reply = processSendFiles(ctx, b, reply, chatID, threadID, dir)
 
 	if reply != "" {
-		sendReply(parentCtx, b, chatID, threadID, reply)
+		sendReply(ctx, b, chatID, threadID, reply)
 	}
 }
 
