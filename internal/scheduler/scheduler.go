@@ -118,8 +118,14 @@ func (s *Scheduler) ResumeTask(id string) error {
 	}
 	task.Status = model.StatusActive
 
+	if err := s.addJob(task); err != nil {
+		if rbErr := db.UpdateTaskStatus(s.db, id, model.StatusPaused); rbErr != nil {
+			log.Printf("scheduler: rollback failed for task %s: %v", id, rbErr)
+		}
+		return fmt.Errorf("scheduler: resume add job: %w", err)
+	}
 	log.Printf("scheduler: resumed task %s", id)
-	return s.addJob(task)
+	return nil
 }
 
 // CancelTask deletes a task entirely.
