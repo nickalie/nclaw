@@ -3,6 +3,7 @@ package claude
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -20,10 +21,11 @@ const (
 )
 
 var (
-	refreshMu    sync.Mutex
-	tokenURLVal  = defaultTokenURL
-	credPathFunc = defaultCredentialsPath
-	httpClient   = &http.Client{Timeout: 15 * time.Second}
+	refreshMu     sync.Mutex
+	tokenURLVal   = defaultTokenURL
+	credPathFunc  = defaultCredentialsPath
+	httpClient    = &http.Client{Timeout: 15 * time.Second}
+	errNoOAuthKey = errors.New("no claudeAiOauth key")
 )
 
 type tokenRefreshRequest struct {
@@ -56,7 +58,7 @@ func EnsureValidToken() error {
 func refreshIfNeeded(credsPath string) error {
 	root, oauth, refreshToken, expiresAt, err := loadTokenState(credsPath)
 	if err != nil {
-		if !os.IsNotExist(err) && err.Error() != "no claudeAiOauth key" {
+		if !os.IsNotExist(err) && !errors.Is(err, errNoOAuthKey) {
 			log.Printf("claude/auth: load credentials: %v", err)
 		}
 		return nil
@@ -83,14 +85,17 @@ func loadTokenState(path string) (root, oauth map[string]json.RawMessage, refres
 
 	oauthRaw, ok := root["claudeAiOauth"]
 	if !ok {
-		return nil, nil, "", 0, fmt.Errorf("no claudeAiOauth key")
+		return nil, nil, "", 0, errNoOAuthKey
 	}
 
 	if err = json.Unmarshal(oauthRaw, &oauth); err != nil {
 		return nil, nil, "", 0, err
 	}
 
-	refreshToken, expiresAt = extractTokenInfo(oauth)
+	refreshToken, expiresAt, err = extractTokenInfo(oauth)
+	if err != nil {
+		return nil, nil, "", 0, err
+	}
 	return root, oauth, refreshToken, expiresAt, nil
 }
 
@@ -129,16 +134,20 @@ func performRefresh(credsPath string, root, oauth map[string]json.RawMessage, re
 	return nil
 }
 
-func extractTokenInfo(oauth map[string]json.RawMessage) (refreshToken string, expiresAt int64) {
+func extractTokenInfo(oauth map[string]json.RawMessage) (refreshToken string, expiresAt int64, err error) {
 	if raw, ok := oauth["refreshToken"]; ok {
-		_ = json.Unmarshal(raw, &refreshToken)
+		if err := json.Unmarshal(raw, &refreshToken); err != nil {
+			return "", 0, fmt.Errorf("parse refreshToken: %w", err)
+		}
 	}
 
 	if raw, ok := oauth["expiresAt"]; ok {
-		_ = json.Unmarshal(raw, &expiresAt)
+		if err := json.Unmarshal(raw, &expiresAt); err != nil {
+			return "", 0, fmt.Errorf("parse expiresAt: %w", err)
+		}
 	}
 
-	return refreshToken, expiresAt
+	return refreshToken, expiresAt, nil
 }
 
 func setRawField(m map[string]json.RawMessage, key string, value any) {
