@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -24,13 +25,15 @@ type SendFunc func(ctx context.Context, chatID int64, threadID int, text string)
 
 // Scheduler manages scheduled tasks using gocron and SQLite persistence.
 type Scheduler struct {
-	cron    gocron.Scheduler
-	db      *gorm.DB
-	send    SendFunc
-	dataDir string
-	loc     *time.Location
-	jobs    map[string]uuid.UUID // taskID -> gocron job UUID
-	mu      sync.Mutex
+	cron     gocron.Scheduler
+	db       *gorm.DB
+	send     SendFunc
+	dataDir  string
+	loc      *time.Location
+	jobs     map[string]uuid.UUID // taskID -> gocron job UUID
+	running  map[string]bool      // tasks currently executing
+	canceled map[string]bool      // tasks canceled during execution
+	mu       sync.Mutex
 }
 
 // New creates a new Scheduler.
@@ -47,12 +50,14 @@ func New(database *gorm.DB, send SendFunc, timezone, dataDir string) (*Scheduler
 	}
 
 	return &Scheduler{
-		cron:    cron,
-		db:      database,
-		send:    send,
-		dataDir: dataDir,
-		loc:     loc,
-		jobs:    make(map[string]uuid.UUID),
+		cron:     cron,
+		db:       database,
+		send:     send,
+		dataDir:  dataDir,
+		loc:      loc,
+		jobs:     make(map[string]uuid.UUID),
+		running:  make(map[string]bool),
+		canceled: make(map[string]bool),
 	}, nil
 }
 
@@ -144,7 +149,16 @@ func (s *Scheduler) ResumeTask(id string) error {
 
 // CancelTask deletes a task entirely.
 func (s *Scheduler) CancelTask(id string) error {
+	s.mu.Lock()
+	if s.running[id] {
+		s.canceled[id] = true
+	}
+	s.mu.Unlock()
+
 	if err := db.DeleteTask(s.db, id); err != nil {
+		s.mu.Lock()
+		delete(s.canceled, id)
+		s.mu.Unlock()
 		return fmt.Errorf("scheduler: delete task: %w", err)
 	}
 	s.removeJob(id)
@@ -164,6 +178,7 @@ func (s *Scheduler) addJob(task *model.ScheduledTask) error {
 		def,
 		gocron.NewTask(s.executeTask, taskID),
 		gocron.WithName(taskID),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 	)
 	if err != nil {
 		return fmt.Errorf("new job: %w", err)
@@ -212,6 +227,11 @@ func (s *Scheduler) jobDefinition(task *model.ScheduledTask) (gocron.JobDefiniti
 }
 
 func (s *Scheduler) executeTask(taskID string) {
+	s.mu.Lock()
+	s.running[taskID] = true
+	s.mu.Unlock()
+	defer s.clearRunState(taskID)
+
 	task, err := db.GetTask(s.db, taskID)
 	if err != nil {
 		log.Printf("scheduler: execute: task %s not found: %v", taskID, err)
@@ -227,10 +247,7 @@ func (s *Scheduler) executeTask(taskID string) {
 
 	start := time.Now()
 
-	dir := filepath.Join(s.dataDir, fmt.Sprintf("%d", task.ChatID))
-	if task.ThreadID != 0 {
-		dir = filepath.Join(dir, fmt.Sprintf("%d", task.ThreadID))
-	}
+	dir := taskDir(s.dataDir, task.ChatID, task.ThreadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("scheduler: mkdir %s: %v", dir, err)
 	}
@@ -245,8 +262,47 @@ func (s *Scheduler) executeTask(taskID string) {
 		log.Printf("scheduler: task %s completed in %s, reply_len=%d", taskID, duration, len(reply))
 	}
 
-	s.logAndUpdate(task, reply, runErr, duration)
+	s.finalizeAndSend(task, reply, runErr, duration)
+}
+
+// finalizeAndSend records run results and sends the reply, unless the task was canceled.
+func (s *Scheduler) finalizeAndSend(task *model.ScheduledTask, reply string, runErr error, duration time.Duration) {
+	// Atomically verify task still exists and record results.
+	err := s.recordResults(task, reply, runErr, duration)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("scheduler: task %s was deleted during execution, skipping send", task.ID)
+		return
+	}
+	if err != nil {
+		log.Printf("scheduler: task %s record results failed: %v", task.ID, err)
+	}
+
+	if task.ScheduleType == model.ScheduleOnce {
+		s.removeJob(task.ID)
+	}
+
+	// Atomically check canceled and exit "running" state so CancelTask
+	// can no longer flag this execution after we decide to send.
+	s.mu.Lock()
+	wasCanceled := s.canceled[task.ID]
+	delete(s.canceled, task.ID)
+	delete(s.running, task.ID)
+	s.mu.Unlock()
+
+	if wasCanceled {
+		log.Printf("scheduler: task %s was canceled after execution, skipping send", task.ID)
+		return
+	}
+
 	s.sendResult(task, reply, runErr)
+}
+
+// clearRunState removes the task from both the running and canceled sets.
+func (s *Scheduler) clearRunState(taskID string) {
+	s.mu.Lock()
+	delete(s.running, taskID)
+	delete(s.canceled, taskID)
+	s.mu.Unlock()
 }
 
 func (s *Scheduler) invokeClaudeForTask(task *model.ScheduledTask, dir, prompt string) (string, error) {
@@ -258,19 +314,36 @@ func (s *Scheduler) invokeClaudeForTask(task *model.ScheduledTask, dir, prompt s
 	return c.Ask(prompt)
 }
 
-func (s *Scheduler) logAndUpdate(task *model.ScheduledTask, reply string, runErr error, duration time.Duration) {
-	s.logRun(task.ID, reply, runErr, duration)
-	s.updateAfterRun(task, reply, runErr)
+func taskDir(dataDir string, chatID int64, threadID int) string {
+	dir := filepath.Join(dataDir, fmt.Sprintf("%d", chatID))
+	if threadID != 0 {
+		dir = filepath.Join(dir, fmt.Sprintf("%d", threadID))
+	}
+	return dir
 }
 
-func (s *Scheduler) logRun(taskID, reply string, runErr error, duration time.Duration) {
+// recordResults atomically verifies the task still exists and records the run outcome.
+// Returns gorm.ErrRecordNotFound if the task was deleted (e.g. canceled during execution).
+func (s *Scheduler) recordResults(task *model.ScheduledTask, reply string, runErr error, duration time.Duration) error {
+	nextRun := s.resolveNextRun(task)
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if _, err := db.GetTask(tx, task.ID); err != nil {
+			return err
+		}
+		if err := s.logRunTx(tx, task.ID, reply, runErr, duration); err != nil {
+			return err
+		}
+		return s.updateAfterRunTx(tx, task, nextRun, reply, runErr)
+	})
+}
+
+func (s *Scheduler) logRunTx(tx *gorm.DB, taskID, reply string, runErr error, duration time.Duration) error {
 	runLog := &model.TaskRunLog{
 		TaskID:     taskID,
 		RunAt:      time.Now(),
 		DurationMs: duration.Milliseconds(),
 		Status:     "success",
 	}
-
 	if runErr != nil {
 		errStr := runErr.Error()
 		runLog.Status = "error"
@@ -278,31 +351,23 @@ func (s *Scheduler) logRun(taskID, reply string, runErr error, duration time.Dur
 	} else {
 		runLog.Result = &reply
 	}
-
-	if err := db.LogRun(s.db, runLog); err != nil {
-		log.Printf("scheduler: log run: %v", err)
-	}
+	return db.LogRun(tx, runLog)
 }
 
-func (s *Scheduler) updateAfterRun(task *model.ScheduledTask, reply string, runErr error) {
-	nextRun := s.resolveNextRun(task)
-
+func (s *Scheduler) updateAfterRunTx(
+	tx *gorm.DB, task *model.ScheduledTask, nextRun *time.Time, reply string, runErr error,
+) error {
 	resultSummary := truncate(reply, 200)
 	if runErr != nil {
 		resultSummary = "Error: " + runErr.Error()
 	}
-
-	if err := db.UpdateTaskAfterRun(s.db, task.ID, nextRun, resultSummary); err != nil {
-		log.Printf("scheduler: update after run: %v", err)
+	if err := db.UpdateTaskAfterRun(tx, task.ID, nextRun, resultSummary); err != nil {
+		return err
 	}
-
 	if runErr != nil && task.ScheduleType == model.ScheduleOnce {
-		_ = db.UpdateTaskStatus(s.db, task.ID, model.StatusFailed)
+		return db.UpdateTaskStatus(tx, task.ID, model.StatusFailed)
 	}
-
-	if task.ScheduleType == model.ScheduleOnce {
-		s.removeJob(task.ID)
-	}
+	return nil
 }
 
 func (s *Scheduler) resolveNextRun(task *model.ScheduledTask) *time.Time {
