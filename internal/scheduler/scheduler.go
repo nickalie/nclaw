@@ -112,6 +112,9 @@ func (s *Scheduler) ResumeTask(id string) error {
 	if err != nil {
 		return fmt.Errorf("scheduler: get task: %w", err)
 	}
+	if task.Status != model.StatusPaused {
+		return fmt.Errorf("scheduler: task %s is %s, not paused", id, task.Status)
+	}
 
 	if err := db.UpdateTaskStatus(s.db, id, model.StatusActive); err != nil {
 		return err

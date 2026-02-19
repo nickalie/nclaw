@@ -155,9 +155,9 @@ func fetchToFile(ctx context.Context, url, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	if _, err = io.Copy(out, resp.Body); err != nil {
+		out.Close()
 		return err
 	}
 	return out.Close()
