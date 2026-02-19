@@ -48,7 +48,13 @@ func sendFile(ctx context.Context, b *bot.Bot, jsonStr string, chatID int64, thr
 		filePath = filepath.Join(dir, filePath)
 	}
 	filePath = filepath.Clean(filePath)
-	if !strings.HasPrefix(filePath, dir+string(filepath.Separator)) && filePath != dir {
+	resolved, err := filepath.EvalSymlinks(filePath)
+	if err != nil {
+		log.Printf("handler: sendfile resolve error for %s: %v", filePath, err)
+		return
+	}
+	dir = filepath.Clean(dir)
+	if !strings.HasPrefix(resolved, dir+string(filepath.Separator)) {
 		log.Printf("handler: sendfile path %q escapes chat dir, rejected", cmd.Path)
 		return
 	}
