@@ -90,6 +90,13 @@ jobs:
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
 
+      - name: Compute build metadata
+        id: buildmeta
+        run: |
+          echo "commit=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+          echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -97,5 +104,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.buildmeta.outputs.version }}
+            COMMIT=${{ steps.buildmeta.outputs.commit }}
+            BUILD_DATE=${{ steps.buildmeta.outputs.date }}
+            BUILD_NUMBER=${{ github.run_number }}
+            DOCKER_TAG=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
