@@ -81,7 +81,7 @@ func nameOr(name, fallback string) string {
 
 // downloadAttachment fetches a file from Telegram and saves it into dir. Returns the local path.
 func downloadAttachment(ctx context.Context, b *bot.Bot, att *attachment, dir string) (string, error) {
-	localPath := filepath.Join(dir, att.filename)
+	localPath := filepath.Join(dir, filepath.Base(att.filename))
 
 	if isCached(localPath, att) {
 		log.Printf("handler: file %s already cached, skipping download", localPath)
@@ -157,6 +157,8 @@ func fetchToFile(ctx context.Context, url, dst string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
-	return err
+	if _, err = io.Copy(out, resp.Body); err != nil {
+		return err
+	}
+	return out.Close()
 }

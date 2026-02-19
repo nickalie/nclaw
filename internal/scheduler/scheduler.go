@@ -28,6 +28,7 @@ type Scheduler struct {
 	db      *gorm.DB
 	send    SendFunc
 	dataDir string
+	loc     *time.Location
 	jobs    map[string]uuid.UUID // taskID -> gocron job UUID
 	mu      sync.Mutex
 }
@@ -36,6 +37,7 @@ type Scheduler struct {
 func New(database *gorm.DB, send SendFunc, timezone, dataDir string) (*Scheduler, error) {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
+		log.Printf("scheduler: invalid timezone %q, falling back to local: %v", timezone, err)
 		loc = time.Local
 	}
 
@@ -49,6 +51,7 @@ func New(database *gorm.DB, send SendFunc, timezone, dataDir string) (*Scheduler
 		db:      database,
 		send:    send,
 		dataDir: dataDir,
+		loc:     loc,
 		jobs:    make(map[string]uuid.UUID),
 	}, nil
 }
@@ -87,6 +90,7 @@ func (s *Scheduler) CreateTask(task *model.ScheduledTask) error {
 		return fmt.Errorf("scheduler: create task: %w", err)
 	}
 	if err := s.addJob(task); err != nil {
+		_ = db.DeleteTask(s.db, task.ID)
 		return fmt.Errorf("scheduler: add job: %w", err)
 	}
 	log.Printf("scheduler: created task %s (%s: %s) prompt=%q", task.ID, task.ScheduleType, task.ScheduleValue, truncate(task.Prompt, 60))
@@ -172,7 +176,7 @@ func (s *Scheduler) jobDefinition(task *model.ScheduledTask) (gocron.JobDefiniti
 		}
 		return gocron.DurationJob(d), nil
 	case model.ScheduleOnce:
-		t, err := time.ParseInLocation("2006-01-02T15:04:05", task.ScheduleValue, time.Local)
+		t, err := time.ParseInLocation("2006-01-02T15:04:05", task.ScheduleValue, s.loc)
 		if err != nil {
 			return nil, fmt.Errorf("parse once time %q: %w", task.ScheduleValue, err)
 		}
@@ -198,7 +202,10 @@ func (s *Scheduler) executeTask(taskID string) {
 
 	start := time.Now()
 
-	dir := filepath.Join(s.dataDir, fmt.Sprintf("%d", task.ThreadID))
+	dir := filepath.Join(s.dataDir, fmt.Sprintf("%d", task.ChatID))
+	if task.ThreadID != 0 {
+		dir = filepath.Join(dir, fmt.Sprintf("%d", task.ThreadID))
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("scheduler: mkdir %s: %v", dir, err)
 	}
@@ -349,8 +356,9 @@ func (s *Scheduler) FormatTaskList(chatID int64, threadID int) string {
 }
 
 func truncate(str string, maxLen int) string {
-	if len(str) <= maxLen {
+	runes := []rune(str)
+	if len(runes) <= maxLen {
 		return str
 	}
-	return str[:maxLen]
+	return string(runes[:maxLen])
 }
