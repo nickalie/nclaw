@@ -306,6 +306,10 @@ func (s *Scheduler) clearRunState(taskID string) {
 }
 
 func (s *Scheduler) invokeClaudeForTask(task *model.ScheduledTask, dir, prompt string) (string, error) {
+	if err := claude.EnsureValidToken(); err != nil {
+		log.Printf("scheduler: token refresh warning: %v", err)
+	}
+
 	log.Printf("scheduler: invoking claude for task %s in dir=%s context=%s", task.ID, dir, task.ContextMode)
 	c := claude.New().Dir(dir).SkipPermissions()
 	if task.ContextMode == model.ContextGroup {
