@@ -29,3 +29,6 @@ go.work.sum
 Thumbs.db
 data
 .serena
+
+# ralphex progress logs
+.ralphex/progress/

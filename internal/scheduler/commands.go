@@ -83,7 +83,7 @@ func (s *Scheduler) createTaskFromCommand(cmd *scheduleCommand, chatID int64, th
 
 	var nextRun *time.Time
 	if cmd.Type == model.ScheduleOnce {
-		t, err := time.ParseInLocation("2006-01-02T15:04:05", cmd.Value, time.Local)
+		t, err := time.ParseInLocation("2006-01-02T15:04:05", cmd.Value, s.loc)
 		if err != nil {
 			return fmt.Errorf("invalid once time %q: %w", cmd.Value, err)
 		}

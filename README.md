@@ -35,7 +35,7 @@ Claude runs inside a Docker container that serves as the security sandbox. The i
 - **File delivery** — Claude can send files back to you (generated reports, exports, code).
 - **Scheduled tasks** — Create recurring or one-time jobs using natural language.
 - **Rich runtime** — Docker image includes git, kubectl, flux, kustomize, gh CLI, Chromium browser.
-- **Markdown replies** — Responses render in Telegram's Markdown format with plain-text fallback.
+- **HTML-formatted replies** — Responses render using Telegram's HTML formatting with plain-text fallback.
 
 ## Configuration
 
@@ -63,19 +63,19 @@ Tasks persist across restarts. Each task can either continue the existing chat s
 
 ## Skills
 
-Three skills ship with nclaw:
+Two skills ship with nclaw:
 
 | Skill | Purpose |
 |---|---|
 | `schedule` | Create and manage scheduled tasks via natural language |
 | `send-file` | Send generated files back to the user via Telegram |
-| `skill-creator` | Guide for creating new Claude Code skills |
 
 ## Development
 
 ```bash
 make run     # Run locally
 make lint    # Lint
+make test    # Run tests (requires CGO)
 ```
 
 ## Requirements
