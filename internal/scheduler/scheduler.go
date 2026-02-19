@@ -90,7 +90,9 @@ func (s *Scheduler) CreateTask(task *model.ScheduledTask) error {
 		return fmt.Errorf("scheduler: create task: %w", err)
 	}
 	if err := s.addJob(task); err != nil {
-		_ = db.DeleteTask(s.db, task.ID)
+		if delErr := db.DeleteTask(s.db, task.ID); delErr != nil {
+			log.Printf("scheduler: rollback failed for task %s: %v", task.ID, delErr)
+		}
 		return fmt.Errorf("scheduler: add job: %w", err)
 	}
 	log.Printf("scheduler: created task %s (%s: %s) prompt=%q", task.ID, task.ScheduleType, task.ScheduleValue, truncate(task.Prompt, 60))
