@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 var requiredKeys = []string{
 	"telegram.bot_token",
+	"telegram.whitelist_chat_ids",
 	"data_dir",
 }
 
@@ -46,6 +48,19 @@ func Init() error {
 // TelegramBotToken returns the configured Telegram bot token.
 func TelegramBotToken() string {
 	return viper.GetString("telegram.bot_token")
+}
+
+// WhitelistChatIDs returns the list of allowed Telegram chat IDs.
+func WhitelistChatIDs() []int64 {
+	raw := viper.GetString("telegram.whitelist_chat_ids")
+	var ids []int64
+	for _, s := range strings.Split(raw, ",") {
+		s = strings.TrimSpace(s)
+		if id, err := strconv.ParseInt(s, 10, 64); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 // DataDir returns the configured data directory path.

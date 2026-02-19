@@ -44,6 +44,7 @@ Supports `.env` files, `config.yaml`, or `$HOME/.nclaw/config.yaml`. Environment
 | Variable | Required | Description |
 |---|---|---|
 | `NCLAW_TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token from [@BotFather](https://t.me/BotFather) |
+| `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | Yes | Comma-separated list of allowed Telegram chat IDs |
 | `NCLAW_DATA_DIR` | Yes | Base directory for data storage |
 | `NCLAW_DB_PATH` | No | SQLite path (default: `{data_dir}/nclaw.db`) |
 | `NCLAW_TIMEZONE` | No | Timezone for scheduler (default: system local) |

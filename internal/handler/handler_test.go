@@ -183,6 +183,16 @@ func TestNameOr(t *testing.T) {
 	assert.Equal(t, "fallback.ogg", nameOr("", "fallback.ogg"))
 }
 
+func TestIsChatAllowed(t *testing.T) {
+	viper.Set("telegram.whitelist_chat_ids", "100,200,300")
+	defer viper.Reset()
+
+	assert.True(t, isChatAllowed(100))
+	assert.True(t, isChatAllowed(200))
+	assert.True(t, isChatAllowed(300))
+	assert.False(t, isChatAllowed(999))
+}
+
 func TestChatDir_NoThread(t *testing.T) {
 	viper.Set("data_dir", "/data")
 	defer viper.Reset()

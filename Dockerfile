@@ -24,6 +24,7 @@ RUN apk add --no-cache \
     freetype \
     ttf-freefont \
     font-noto-emoji \
+    gcompat \
     python3 \
     py3-pip \
     pipx

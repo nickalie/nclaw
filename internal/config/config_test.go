@@ -60,9 +60,26 @@ func TestInit_MissingRequired(t *testing.T) {
 func TestInit_AllRequired(t *testing.T) {
 	viper.Reset()
 	viper.Set("telegram.bot_token", "token")
+	viper.Set("telegram.whitelist_chat_ids", "123")
 	viper.Set("data_dir", "/tmp/test")
 	defer viper.Reset()
 
 	err := Init()
 	assert.NoError(t, err)
+}
+
+func TestWhitelistChatIDs(t *testing.T) {
+	viper.Set("telegram.whitelist_chat_ids", "111,222,333")
+	defer viper.Reset()
+
+	ids := WhitelistChatIDs()
+	assert.Equal(t, []int64{111, 222, 333}, ids)
+}
+
+func TestWhitelistChatIDs_Single(t *testing.T) {
+	viper.Set("telegram.whitelist_chat_ids", "42")
+	defer viper.Reset()
+
+	ids := WhitelistChatIDs()
+	assert.Equal(t, []int64{42}, ids)
 }
