@@ -232,8 +232,7 @@ func setupTestWebhookManager(t *testing.T) *webhook.Manager {
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
 	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
-	sendDoc := func(_ context.Context, _ int64, _ int, _ string, _ []byte, _ string) error { return nil }
-	return webhook.NewManager(database, send, sendDoc, "example.com", t.TempDir(), telegram.NewChatLocker())
+	return webhook.NewManager(database, send, "example.com", t.TempDir(), telegram.NewChatLocker())
 }
 
 func TestHandlerWebhookManager_NilStripsBlocks(t *testing.T) {

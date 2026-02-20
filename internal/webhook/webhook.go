@@ -57,7 +57,6 @@ var sensitiveSubstrings = []string{"token", "secret", "signature", "api-key", "a
 type Manager struct {
 	db         *gorm.DB
 	send       SendFunc
-	sendDoc    sendfile.SendDocFunc
 	baseDomain string
 	dataDir    string
 	sem        chan struct{}
@@ -67,13 +66,12 @@ type Manager struct {
 
 // NewManager creates a new webhook Manager.
 func NewManager(
-	database *gorm.DB, send SendFunc, sendDoc sendfile.SendDocFunc,
+	database *gorm.DB, send SendFunc,
 	baseDomain, dataDir string, chatLocker *telegram.ChatLocker,
 ) *Manager {
 	return &Manager{
 		db:         database,
 		send:       send,
-		sendDoc:    sendDoc,
 		baseDomain: baseDomain,
 		dataDir:    dataDir,
 		sem:        make(chan struct{}, maxConcurrentWebhooks),
@@ -161,8 +159,7 @@ func (m *Manager) processIncoming(wh *model.WebhookRegistration, req IncomingReq
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	dir := telegram.ChatDir(m.dataDir, wh.ChatID, wh.ThreadID)
-	reply = sendfile.ProcessReply(ctx, m.sendDoc, reply, wh.ChatID, wh.ThreadID, dir)
+	reply = sendfile.StripBlocks(reply)
 
 	if reply == "" {
 		return

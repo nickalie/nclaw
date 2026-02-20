@@ -57,7 +57,7 @@ func main() {
 
 	h.Scheduler = sched
 
-	webhookSrv, webhookMgr := startWebhooks(database, b, sendDoc, chatLocker)
+	webhookSrv, webhookMgr := startWebhooks(database, b, chatLocker)
 	h.WebhookManager = webhookMgr
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -130,14 +130,14 @@ func newWebhookSendFunc(b *bot.Bot) webhook.SendFunc {
 }
 
 func startWebhooks(
-	database *gorm.DB, b *bot.Bot, sendDoc sendfile.SendDocFunc, chatLocker *telegram.ChatLocker,
+	database *gorm.DB, b *bot.Bot, chatLocker *telegram.ChatLocker,
 ) (*webhook.Server, *webhook.Manager) {
 	domain := config.WebhookBaseDomain()
 	if domain == "" {
 		return nil, nil
 	}
 
-	mgr := webhook.NewManager(database, newWebhookSendFunc(b), sendDoc, domain, config.DataDir(), chatLocker)
+	mgr := webhook.NewManager(database, newWebhookSendFunc(b), domain, config.DataDir(), chatLocker)
 	srv := webhook.NewServer(mgr)
 
 	listenErr := make(chan error, 1)

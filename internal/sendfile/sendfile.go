@@ -20,6 +20,11 @@ type command struct {
 	Caption string `json:"caption"`
 }
 
+// StripBlocks removes nclaw:sendfile code blocks from text without processing them.
+func StripBlocks(text string) string {
+	return strings.TrimSpace(blockRe.ReplaceAllString(text, ""))
+}
+
 // ProcessReply extracts nclaw:sendfile blocks, sends files via sendDoc, and returns cleaned text.
 func ProcessReply(ctx context.Context, sendDoc SendDocFunc, reply string, chatID int64, threadID int, dir string) string {
 	matches := blockRe.FindAllStringSubmatch(reply, -1)
@@ -36,6 +41,11 @@ func ProcessReply(ctx context.Context, sendDoc SendDocFunc, reply string, chatID
 }
 
 func send(ctx context.Context, sendDoc SendDocFunc, jsonStr string, chatID int64, threadID int, dir string) {
+	if sendDoc == nil {
+		log.Printf("sendfile: sendDoc callback is nil, skipping")
+		return
+	}
+
 	var cmd command
 	if err := json.Unmarshal([]byte(jsonStr), &cmd); err != nil {
 		log.Printf("sendfile: invalid JSON: %v", err)

@@ -135,3 +135,24 @@ func TestProcessReply_InvalidJSON(t *testing.T) {
 	result := ProcessReply(context.TODO(), noopSendDoc, reply, 1, 0, "")
 	assert.Equal(t, "text\n\nmore", result)
 }
+
+func TestProcessReply_NilSendDoc(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "test.txt")
+	require.NoError(t, os.WriteFile(filePath, []byte("hello"), 0o644))
+
+	reply := "text\n```nclaw:sendfile\n{\"path\":\"test.txt\"}\n```\nmore"
+	result := ProcessReply(context.TODO(), nil, reply, 1, 0, dir)
+	assert.Equal(t, "text\n\nmore", result)
+}
+
+func TestStripBlocks(t *testing.T) {
+	reply := "before\n```nclaw:sendfile\n{\"path\":\"file.txt\"}\n```\nafter"
+	result := StripBlocks(reply)
+	assert.Equal(t, "before\n\nafter", result)
+}
+
+func TestStripBlocks_NoBlocks(t *testing.T) {
+	result := StripBlocks("plain text")
+	assert.Equal(t, "plain text", result)
+}
