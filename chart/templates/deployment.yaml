@@ -31,7 +31,7 @@ spec:
             - sh
             - -c
             - |
-              mkdir -p /app/data/.claude
+              mkdir -p /app/data/.claude /app/data/.config
               if [ ! -f /app/data/.claude/credentials.json ]; then
                 cp /tmp/credentials/credentials.json /app/data/.claude/credentials.json
               fi
@@ -85,6 +85,9 @@ spec:
             - name: data
               mountPath: /root/.claude
               subPath: .claude
+            - name: data
+              mountPath: /root/.config
+              subPath: .config
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
