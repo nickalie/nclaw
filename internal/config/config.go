@@ -82,6 +82,19 @@ func DBPath() string {
 	return filepath.Join(DataDir(), "nclaw.db")
 }
 
+// WebhookBaseDomain returns the configured base domain for webhook URLs.
+func WebhookBaseDomain() string {
+	return viper.GetString("webhook.base_domain")
+}
+
+// WebhookPort returns the configured webhook server listen address, defaulting to ":3000".
+func WebhookPort() string {
+	if p := viper.GetString("webhook.port"); p != "" {
+		return p
+	}
+	return ":3000"
+}
+
 // Timezone returns the configured timezone name, defaulting to system local.
 func Timezone() string {
 	if tz := viper.GetString("timezone"); tz != "" {

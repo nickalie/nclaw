@@ -38,10 +38,10 @@ Add a GoFiber-based HTTP server that runs alongside the Telegram bot, enabling C
 **Files:**
 - Modify: `internal/config/config.go`
 
-- [ ] Add config keys: `webhook.base_domain` (string, required when webhooks enabled), `webhook.port` (string, default `:3000`)
-- [ ] Add config getter functions following existing pattern
-- [ ] Write tests for config defaults
-- [ ] Run project test suite - must pass before task 3
+- [x] Add config keys: `webhook.base_domain` (string, required when webhooks enabled), `webhook.port` (string, default `:3000`)
+- [x] Add config getter functions following existing pattern
+- [x] Write tests for config defaults
+- [x] Run project test suite - must pass before task 3
 
 ### Task 3: Webhook package - server, manager, and command parsing
 
