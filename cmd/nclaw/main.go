@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/db"
@@ -105,12 +106,16 @@ func newSendFunc(b *bot.Bot) scheduler.SendFunc {
 }
 
 func newWebhookSendFunc(b *bot.Bot) webhook.SendFunc {
-	return func(ctx context.Context, chatID int64, threadID int, text string) error {
-		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+	return func(ctx context.Context, chatID int64, threadID int, text, parseMode string) error {
+		params := &bot.SendMessageParams{
 			ChatID:          chatID,
 			MessageThreadID: threadID,
 			Text:            text,
-		})
+		}
+		if parseMode != "" {
+			params.ParseMode = models.ParseMode(parseMode)
+		}
+		_, err := b.SendMessage(ctx, params)
 		return err
 	}
 }

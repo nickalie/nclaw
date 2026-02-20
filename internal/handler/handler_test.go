@@ -256,7 +256,7 @@ func setupTestWebhookManager(t *testing.T) *webhook.Manager {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
-	send := func(_ context.Context, _ int64, _ int, _ string) error { return nil }
+	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
 	return webhook.NewManager(database, send, "example.com", t.TempDir())
 }
 

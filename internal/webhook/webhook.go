@@ -17,8 +17,8 @@ import (
 	"github.com/nickalie/nclaw/internal/model"
 )
 
-// SendFunc sends a text message to a Telegram chat/thread.
-type SendFunc func(ctx context.Context, chatID int64, threadID int, text string) error
+// SendFunc sends a text message to a Telegram chat/thread with an optional parse mode.
+type SendFunc func(ctx context.Context, chatID int64, threadID int, text, parseMode string) error
 
 // IncomingRequest holds the data from an incoming webhook HTTP request.
 type IncomingRequest struct {
@@ -28,7 +28,29 @@ type IncomingRequest struct {
 	Body    string
 }
 
+// Sentinel errors returned by HandleIncoming.
+var (
+	ErrWebhookNotFound = errors.New("webhook not found")
+	ErrWebhookInactive = errors.New("webhook inactive")
+	ErrTooManyRequests = errors.New("too many concurrent requests")
+)
+
 const maxConcurrentWebhooks = 5
+
+const telegramPrompt = `IMPORTANT: Your output will be displayed in Telegram.
+Format all responses using Telegram HTML. Supported tags:
+<b>bold</b>, <i>italic</i>, <u>underline</u>, <s>strikethrough</s>,
+<code>inline code</code>, <pre>code block</pre>, <pre><code class="language-go">code with language</code></pre>,
+<a href="URL">link</a>, <blockquote>quote</blockquote>, <tg-spoiler>spoiler</tg-spoiler>
+
+Rules:
+- Do NOT use Markdown syntax (no #headers, no **bold**, no backticks for code)
+- Use ONLY the HTML tags listed above. No other HTML tags are supported.
+- Escape &, < and > in regular text as &amp; &lt; &gt; (but not inside tags themselves)
+- Do NOT use <p>, <br>, <div>, <h1>-<h6>, <ul>, <li>, <ol>, <table>, or any other HTML tags
+- For lists, use plain text with bullet characters or numbers
+- For section titles, use <b>bold text</b> on its own line
+- Keep formatting minimal and clean`
 
 // Manager handles webhook registration and incoming webhook processing.
 type Manager struct {
@@ -90,10 +112,10 @@ func (m *Manager) WebhookURL(webhookID string) string {
 func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 	webhook, err := db.GetWebhookByID(m.db, webhookID)
 	if err != nil {
-		return err
+		return ErrWebhookNotFound
 	}
 	if webhook.Status != model.WebhookStatusActive {
-		return errors.New("webhook inactive")
+		return ErrWebhookInactive
 	}
 
 	log.Printf("webhook: incoming request for %s method=%s", webhookID, req.Method)
@@ -105,7 +127,7 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 		}()
 	default:
 		log.Printf("webhook: concurrency limit reached for %s", webhookID)
-		return errors.New("too many concurrent requests")
+		return ErrTooManyRequests
 	}
 	return nil
 }
@@ -123,7 +145,7 @@ func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req Incomi
 		log.Printf("webhook: token refresh warning: %v", err)
 	}
 
-	reply, err := claude.New().Dir(dir).SkipPermissions().Continue(prompt)
+	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(telegramPrompt).Continue(prompt)
 	if err != nil {
 		log.Printf("webhook: claude error for %s: %v", webhook.ID, err)
 		if reply == "" {
@@ -138,9 +160,45 @@ func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req Incomi
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := m.send(ctx, webhook.ChatID, webhook.ThreadID, reply); err != nil {
-		log.Printf("webhook: send error for %s: %v", webhook.ID, err)
+	m.sendReply(ctx, webhook.ChatID, webhook.ThreadID, reply)
+}
+
+const maxMessageLen = 4096
+
+func (m *Manager) sendReply(ctx context.Context, chatID int64, threadID int, text string) {
+	for _, chunk := range splitMessage(text, maxMessageLen) {
+		m.sendChunk(ctx, chatID, threadID, chunk)
 	}
+}
+
+func (m *Manager) sendChunk(ctx context.Context, chatID int64, threadID int, text string) {
+	for _, mode := range []string{"HTML", ""} {
+		if err := m.send(ctx, chatID, threadID, text, mode); err == nil {
+			return
+		}
+		log.Printf("webhook: send parseMode=%q error, trying fallback", mode)
+	}
+}
+
+func splitMessage(text string, maxLen int) []string {
+	if len(text) <= maxLen {
+		return []string{text}
+	}
+
+	var chunks []string
+	for text != "" {
+		if len(text) <= maxLen {
+			chunks = append(chunks, text)
+			break
+		}
+		cut := strings.LastIndex(text[:maxLen], "\n")
+		if cut <= 0 {
+			cut = maxLen
+		}
+		chunks = append(chunks, text[:cut])
+		text = strings.TrimLeft(text[cut:], "\n")
+	}
+	return chunks
 }
 
 func buildIncomingPrompt(webhook *model.WebhookRegistration, req IncomingRequest) string {

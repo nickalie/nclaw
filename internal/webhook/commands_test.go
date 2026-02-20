@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,7 @@ func setupTestManager(t *testing.T) *Manager {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
-	send := func(_ context.Context, _ int64, _ int, _ string) error { return nil }
+	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
 	return NewManager(database, send, "example.com", t.TempDir())
 }
 
@@ -202,7 +203,7 @@ func TestHandleIncoming_Inactive(t *testing.T) {
 
 	err = m.HandleIncoming(wh.ID, IncomingRequest{Method: "POST"})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "inactive")
+	assert.ErrorIs(t, err, ErrWebhookInactive)
 }
 
 func TestBuildIncomingPrompt(t *testing.T) {
@@ -253,4 +254,37 @@ func TestHandleIncoming_ActiveWebhook(t *testing.T) {
 	// HandleIncoming should succeed for active webhook (spawns goroutine but we don't wait for it).
 	err = m.HandleIncoming(wh.ID, IncomingRequest{Method: "POST", Body: "test"})
 	assert.NoError(t, err)
+}
+
+func TestHandleIncoming_NotFound_SentinelError(t *testing.T) {
+	m := setupTestManager(t)
+	err := m.HandleIncoming("nonexistent", IncomingRequest{Method: "GET"})
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestSplitMessage_Short(t *testing.T) {
+	chunks := splitMessage("hello", 100)
+	assert.Equal(t, []string{"hello"}, chunks)
+}
+
+func TestSplitMessage_ExactLimit(t *testing.T) {
+	text := strings.Repeat("a", 100)
+	chunks := splitMessage(text, 100)
+	assert.Equal(t, []string{text}, chunks)
+}
+
+func TestSplitMessage_SplitsAtNewline(t *testing.T) {
+	text := strings.Repeat("a", 50) + "\n" + strings.Repeat("b", 50)
+	chunks := splitMessage(text, 60)
+	assert.Len(t, chunks, 2)
+	assert.Equal(t, strings.Repeat("a", 50), chunks[0])
+	assert.Equal(t, strings.Repeat("b", 50), chunks[1])
+}
+
+func TestSplitMessage_NoNewline(t *testing.T) {
+	text := strings.Repeat("a", 200)
+	chunks := splitMessage(text, 100)
+	assert.Len(t, chunks, 2)
+	assert.Equal(t, strings.Repeat("a", 100), chunks[0])
+	assert.Equal(t, strings.Repeat("a", 100), chunks[1])
 }

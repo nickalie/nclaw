@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"errors"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
@@ -51,7 +52,7 @@ func (s *Server) handleWebhook(c *fiber.Ctx) error {
 	}
 
 	if err := s.manager.HandleIncoming(id, req); err != nil {
-		if err.Error() == "too many concurrent requests" {
+		if errors.Is(err, ErrTooManyRequests) {
 			return c.SendStatus(fiber.StatusTooManyRequests)
 		}
 		return c.SendStatus(fiber.StatusNotFound)
