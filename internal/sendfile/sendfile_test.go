@@ -2,12 +2,18 @@ package sendfile
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+var noopSendDoc SendDocFunc = func(_ context.Context, _ int64, _ int, _ string, _ []byte, _ string) error {
+	return nil
+}
 
 func TestProcessReply_NoMatch(t *testing.T) {
 	result := ProcessReply(context.TODO(), nil, "plain reply", 0, 0, "")
@@ -16,8 +22,8 @@ func TestProcessReply_NoMatch(t *testing.T) {
 
 func TestProcessReply_StripsBlocks(t *testing.T) {
 	reply := "before\n```nclaw:sendfile\n{\"path\":\"/nonexistent\",\"caption\":\"test\"}\n```\nafter"
-	// send will fail (no sendDoc, file doesn't exist) but the block should still be stripped.
-	result := ProcessReply(context.TODO(), nil, reply, 0, 0, "")
+	// send will fail (file doesn't exist) but the block should still be stripped.
+	result := ProcessReply(context.TODO(), noopSendDoc, reply, 0, 0, "")
 	assert.Equal(t, "before\n\nafter", result)
 }
 
@@ -53,12 +59,13 @@ func TestBlockRegex_Multiple(t *testing.T) {
 func TestProcessReply_SendsFile(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "test.txt")
-	os.WriteFile(filePath, []byte("hello"), 0o644)
+	require.NoError(t, os.WriteFile(filePath, []byte("hello"), 0o644))
 
 	var sent bool
 	sendDoc := func(_ context.Context, chatID int64, threadID int, filename string, data []byte, caption string) error {
 		sent = true
 		assert.Equal(t, int64(42), chatID)
+		assert.Equal(t, 0, threadID)
 		assert.Equal(t, "test.txt", filename)
 		assert.Equal(t, []byte("hello"), data)
 		assert.Equal(t, "cap", caption)
@@ -69,5 +76,62 @@ func TestProcessReply_SendsFile(t *testing.T) {
 	result := ProcessReply(context.TODO(), sendDoc, reply, 42, 0, dir)
 
 	assert.True(t, sent)
+	assert.Equal(t, "text\n\nmore", result)
+}
+
+func TestProcessReply_SendsFileAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "abs.txt")
+	require.NoError(t, os.WriteFile(filePath, []byte("absolute"), 0o644))
+
+	var sent bool
+	sendDoc := func(_ context.Context, _ int64, _ int, filename string, data []byte, _ string) error {
+		sent = true
+		assert.Equal(t, "abs.txt", filename)
+		assert.Equal(t, []byte("absolute"), data)
+		return nil
+	}
+
+	reply := fmt.Sprintf("```nclaw:sendfile\n{\"path\":%q}\n```", filePath)
+	result := ProcessReply(context.TODO(), sendDoc, reply, 1, 0, dir)
+
+	assert.True(t, sent)
+	assert.Empty(t, result)
+}
+
+func TestProcessReply_PathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	var called bool
+	sendDoc := func(_ context.Context, _ int64, _ int, _ string, _ []byte, _ string) error {
+		called = true
+		return nil
+	}
+
+	reply := "```nclaw:sendfile\n{\"path\":\"../../../etc/passwd\"}\n```"
+	result := ProcessReply(context.TODO(), sendDoc, reply, 1, 0, dir)
+
+	assert.False(t, called, "sendDoc should not be called for path traversal attempts")
+	assert.Empty(t, result)
+}
+
+func TestProcessReply_SendDocError(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "err.txt")
+	require.NoError(t, os.WriteFile(filePath, []byte("data"), 0o644))
+
+	sendDoc := func(_ context.Context, _ int64, _ int, _ string, _ []byte, _ string) error {
+		return fmt.Errorf("telegram API error")
+	}
+
+	reply := "before\n```nclaw:sendfile\n{\"path\":\"err.txt\"}\n```\nafter"
+	result := ProcessReply(context.TODO(), sendDoc, reply, 1, 0, dir)
+
+	// Block should still be stripped even when sendDoc fails.
+	assert.Equal(t, "before\n\nafter", result)
+}
+
+func TestProcessReply_InvalidJSON(t *testing.T) {
+	reply := "text\n```nclaw:sendfile\n{invalid json}\n```\nmore"
+	result := ProcessReply(context.TODO(), noopSendDoc, reply, 1, 0, "")
 	assert.Equal(t, "text\n\nmore", result)
 }

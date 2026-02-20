@@ -47,6 +47,7 @@ func main() {
 	}
 
 	sendDoc := newSendDocFunc(b)
+	h.SendDoc = sendDoc
 	sched, err := scheduler.New(database, newSendFunc(b), sendDoc, config.Timezone(), config.DataDir(), chatLocker)
 	if err != nil {
 		log.Fatal("scheduler: ", err)

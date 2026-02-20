@@ -20,11 +20,6 @@ type command struct {
 	Caption string `json:"caption"`
 }
 
-// StripBlocks removes all nclaw:sendfile code blocks from the text.
-func StripBlocks(reply string) string {
-	return strings.TrimSpace(blockRe.ReplaceAllString(reply, ""))
-}
-
 // ProcessReply extracts nclaw:sendfile blocks, sends files via sendDoc, and returns cleaned text.
 func ProcessReply(ctx context.Context, sendDoc SendDocFunc, reply string, chatID int64, threadID int, dir string) string {
 	matches := blockRe.FindAllStringSubmatch(reply, -1)

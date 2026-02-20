@@ -24,6 +24,7 @@ type Handler struct {
 	Scheduler      *scheduler.Scheduler
 	WebhookManager *webhook.Manager
 	ChatLocker     *telegram.ChatLocker
+	SendDoc        sendfile.SendDocFunc
 }
 
 // Default handles incoming messages by forwarding them to Claude Code.
@@ -69,7 +70,7 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	unlock()
 	stopTyping()
 
-	reply = sendfile.ProcessReply(ctx, newSendDocFunc(b), reply, chatID, threadID, dir)
+	reply = sendfile.ProcessReply(ctx, h.SendDoc, reply, chatID, threadID, dir)
 
 	if reply != "" {
 		sendReply(ctx, b, chatID, threadID, reply)
