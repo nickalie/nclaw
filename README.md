@@ -13,7 +13,10 @@ I wanted a Claude Code assistant I could reach from anywhere. Not a chatbot wrap
 ```bash
 git clone https://github.com/nickalie/nclaw.git
 cd nclaw
-cp .env.example .env  # Add your Telegram bot token
+# Create .env with your config (see Configuration below)
+echo 'NCLAW_TELEGRAM_BOT_TOKEN=your-token-here' > .env
+echo 'NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id' >> .env
+echo 'NCLAW_DATA_DIR=data' >> .env
 docker build -t nclaw .
 docker run -d --name nclaw --env-file .env nclaw
 ```
@@ -28,7 +31,7 @@ Telegram --> nclaw --> Claude Code CLI (in container) --> Telegram
                    --> Webhook Server (incoming HTTP callbacks)
 ```
 
-Claude runs inside a Docker container that serves as the security sandbox. The image ships with git, kubectl, flux, kustomize, GitHub CLI, and Chromium — making it a capable DevOps assistant out of the box.
+Claude runs inside a Docker container that serves as the security sandbox. The image ships with git, GitHub CLI, Chromium, Go, Node.js, and Python/uv — making it a capable assistant out of the box.
 
 ## Features
 
@@ -37,7 +40,7 @@ Claude runs inside a Docker container that serves as the security sandbox. The i
 - **File delivery** — Claude can send files back to you (generated reports, exports, code).
 - **Scheduled tasks** — Create recurring or one-time jobs using natural language.
 - **Webhooks** — Register HTTP endpoints that forward incoming requests to Claude in your chat.
-- **Rich runtime** — Docker image includes git, kubectl, flux, kustomize, gh CLI, Chromium browser.
+- **Rich runtime** — Docker image includes git, gh CLI, Chromium, Go, Node.js, Python/uv.
 - **HTML-formatted replies** — Responses render using Telegram's HTML formatting with plain-text fallback.
 
 ## Configuration
@@ -59,9 +62,9 @@ Supports `.env` files, `config.yaml`, or `$HOME/.nclaw/config.yaml`. Environment
 Talk naturally to create scheduled tasks:
 
 ```
-Remind me to check the deployment every weekday at 9am
-Every 30 minutes, check if the staging server is healthy
-At 3pm today, generate a summary of today's git commits
+Remind me to take a break every 2 hours
+Every morning at 8am, give me a weather summary and top news headlines
+At 6pm on Friday, create a meal plan for the weekend
 ```
 
 Tasks persist across restarts. Each task can either continue the existing chat session or run in a fresh isolated context.
@@ -71,8 +74,8 @@ Tasks persist across restarts. Each task can either continue the existing chat s
 Register HTTP endpoints that forward incoming requests to Claude:
 
 ```
-Create a webhook that receives GitHub push events and summarizes the changes
-Set up a webhook for my monitoring alerts
+Create a webhook that receives smart home events and notifies me about unusual activity
+Set up a webhook for my package tracking updates
 ```
 
 When an external service calls the webhook URL, the request (method, headers, query params, body) is forwarded to Claude in the originating chat. The HTTP endpoint returns 200 immediately; Claude processes the request asynchronously. Webhooks persist across restarts.

@@ -94,4 +94,4 @@ GitHub Actions pipeline (`.github/workflows/ci.yml`):
 
 ## Docker
 
-The runtime image (`node:24-alpine` based) includes Claude Code, Go, git, kubectl, flux, kustomize, gh CLI, Chromium, and Python/uv. Claude Code skills (`schedule`, `send-file`, `webhook`) are copied into the global skills directory.
+The runtime image (`node:24-alpine` based) includes Claude Code, Go, git, gh CLI, Chromium, and Python/uv. Claude Code skills (`schedule`, `send-file`, `webhook`) are copied into the global skills directory.
