@@ -27,11 +27,11 @@ Add a GoFiber-based HTTP server that runs alongside the Telegram bot, enabling C
 - Create: `internal/model/webhook.go`
 - Create: `internal/db/webhook.go`
 
-- [ ] Define `WebhookRegistration` GORM model with fields: `ID` (UUID string, primary key), `ChatID` (int64), `ThreadID` (int, nullable), `Description` (string), `Status` (string: active/paused), `CreatedAt`, `UpdatedAt`
-- [ ] Add DB functions: `CreateWebhook`, `GetWebhookByID`, `ListWebhooksByChat`, `DeleteWebhook`, `UpdateWebhookStatus`
-- [ ] Add `WebhookRegistration` to AutoMigrate in `cmd/nclaw/main.go`
-- [ ] Write tests for DB operations
-- [ ] Run project test suite - must pass before task 2
+- [x] Define `WebhookRegistration` GORM model with fields: `ID` (UUID string, primary key), `ChatID` (int64), `ThreadID` (int, nullable), `Description` (string), `Status` (string: active/paused), `CreatedAt`, `UpdatedAt`
+- [x] Add DB functions: `CreateWebhook`, `GetWebhookByID`, `ListWebhooksByChat`, `DeleteWebhook`, `UpdateWebhookStatus`
+- [x] Add `WebhookRegistration` to AutoMigrate in `cmd/nclaw/main.go`
+- [x] Write tests for DB operations
+- [x] Run project test suite - must pass before task 2
 
 ### Task 2: Webhook configuration
 
