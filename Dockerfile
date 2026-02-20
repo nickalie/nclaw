@@ -26,9 +26,6 @@ RUN apk add --no-cache \
     curl \
     openssh-client \
     github-cli \
-    kubectl \
-    flux \
-    kustomize \
     chromium \
     harfbuzz \
     nss \
