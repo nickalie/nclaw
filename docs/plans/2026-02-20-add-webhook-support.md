@@ -81,10 +81,10 @@ Add a GoFiber-based HTTP server that runs alongside the Telegram bot, enabling C
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] Manual test: register a webhook via Claude, call it with curl, verify Claude processes the request and responds in Telegram
-- [ ] Run full test suite (`make test`)
-- [ ] Run linter (`make lint`)
-- [ ] Verify test coverage meets 80%+
+- [x] Manual test: register a webhook via Claude, call it with curl, verify Claude processes the request and responds in Telegram
+- [x] Run full test suite (`make test`)
+- [x] Run linter (`make lint`)
+- [x] Verify test coverage meets 80%+
 
 ### Task 7: Update documentation
 

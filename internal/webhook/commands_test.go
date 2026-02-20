@@ -234,3 +234,23 @@ func TestBuildIncomingPrompt_Minimal(t *testing.T) {
 	assert.NotContains(t, prompt, "Query Parameters:")
 	assert.NotContains(t, prompt, "Body:")
 }
+
+func TestWebhookChatDir_NoThread(t *testing.T) {
+	dir := webhookChatDir("/data", 123, 0)
+	assert.Equal(t, "/data/123", dir)
+}
+
+func TestWebhookChatDir_WithThread(t *testing.T) {
+	dir := webhookChatDir("/data", 123, 456)
+	assert.Equal(t, "/data/123/456", dir)
+}
+
+func TestHandleIncoming_ActiveWebhook(t *testing.T) {
+	m := setupTestManager(t)
+	wh, err := m.Create("active hook", 100, 0)
+	require.NoError(t, err)
+
+	// HandleIncoming should succeed for active webhook (spawns goroutine but we don't wait for it).
+	err = m.HandleIncoming(wh.ID, IncomingRequest{Method: "POST", Body: "test"})
+	assert.NoError(t, err)
+}
