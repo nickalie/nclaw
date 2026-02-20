@@ -17,5 +17,5 @@ func Open(path string) (*gorm.DB, error) {
 
 // Init runs auto-migration for all models.
 func Init(database *gorm.DB) error {
-	return database.AutoMigrate(&model.ScheduledTask{}, &model.TaskRunLog{})
+	return database.AutoMigrate(&model.ScheduledTask{}, &model.TaskRunLog{}, &model.WebhookRegistration{})
 }

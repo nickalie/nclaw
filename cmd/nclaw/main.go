@@ -8,12 +8,16 @@ import (
 	"time"
 
 	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
+	"gorm.io/gorm"
 
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/handler"
 	"github.com/nickalie/nclaw/internal/scheduler"
+	"github.com/nickalie/nclaw/internal/telegram"
 	"github.com/nickalie/nclaw/internal/version"
+	"github.com/nickalie/nclaw/internal/webhook"
 )
 
 func main() {
@@ -30,7 +34,8 @@ func main() {
 		log.Fatal("db init: ", err)
 	}
 
-	h := &handler.Handler{}
+	chatLocker := telegram.NewChatLocker()
+	h := &handler.Handler{ChatLocker: chatLocker}
 
 	b, err := bot.New(config.TelegramBotToken(),
 		bot.WithDefaultHandler(h.Default),
@@ -39,7 +44,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sched, err := scheduler.New(database, newSendFunc(b), config.Timezone(), config.DataDir())
+	sched, err := scheduler.New(database, newSendFunc(b), config.Timezone(), config.DataDir(), chatLocker)
 	if err != nil {
 		log.Fatal("scheduler: ", err)
 	}
@@ -48,9 +53,13 @@ func main() {
 
 	h.Scheduler = sched
 
+	webhookSrv, webhookMgr := startWebhooks(database, b, chatLocker)
+	h.WebhookManager = webhookMgr
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	defer sched.Shutdown()
+	defer shutdownWebhook(webhookSrv, webhookMgr)
 
 	log.Printf("nclaw bot started (%s)", version.String())
 	sendStartupNotifications(b)
@@ -86,5 +95,64 @@ func newSendFunc(b *bot.Bot) scheduler.SendFunc {
 			Text:            text,
 		})
 		return err
+	}
+}
+
+func newWebhookSendFunc(b *bot.Bot) webhook.SendFunc {
+	return func(ctx context.Context, chatID int64, threadID int, text, parseMode string) error {
+		params := &bot.SendMessageParams{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			Text:            text,
+		}
+		if parseMode != "" {
+			params.ParseMode = models.ParseMode(parseMode)
+		}
+		_, err := b.SendMessage(ctx, params)
+		return err
+	}
+}
+
+func startWebhooks(database *gorm.DB, b *bot.Bot, chatLocker *telegram.ChatLocker) (*webhook.Server, *webhook.Manager) {
+	domain := config.WebhookBaseDomain()
+	if domain == "" {
+		return nil, nil
+	}
+
+	mgr := webhook.NewManager(database, newWebhookSendFunc(b), domain, config.DataDir(), chatLocker)
+	srv := webhook.NewServer(mgr)
+
+	listenErr := make(chan error, 1)
+	go func() {
+		if err := srv.Listen(config.WebhookPort()); err != nil {
+			listenErr <- err
+		}
+	}()
+
+	// Give the listener a moment to fail on bind errors.
+	select {
+	case err := <-listenErr:
+		log.Fatalf("webhook server failed to start: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Monitor for runtime listener failures.
+	go func() {
+		if err, ok := <-listenErr; ok {
+			log.Fatalf("webhook server error: %v", err)
+		}
+	}()
+
+	return srv, mgr
+}
+
+func shutdownWebhook(srv *webhook.Server, mgr *webhook.Manager) {
+	if srv != nil {
+		if err := srv.Shutdown(); err != nil {
+			log.Printf("webhook shutdown: %v", err)
+		}
+	}
+	if mgr != nil {
+		mgr.Wait()
 	}
 }
