@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/scheduler"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
 
@@ -37,6 +39,8 @@ var (
 )
 
 const maxConcurrentWebhooks = 5
+
+var sendFileBlockRe = regexp.MustCompile("(?s)```nclaw:sendfile\n(.*?)\n```")
 
 // sensitiveHeaders are HTTP headers that should not be forwarded to Claude.
 var sensitiveHeaders = map[string]bool{
@@ -160,6 +164,8 @@ func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req Incomi
 	}
 
 	reply = StripBlocks(reply)
+	reply = scheduler.StripBlocks(reply)
+	reply = strings.TrimSpace(sendFileBlockRe.ReplaceAllString(reply, ""))
 
 	if reply == "" {
 		return
