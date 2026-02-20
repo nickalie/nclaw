@@ -80,6 +80,13 @@ func TestDeleteWebhook(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestDeleteWebhook_NotFound(t *testing.T) {
+	database := setupTestDB(t)
+
+	err := DeleteWebhook(database, "nonexistent-id")
+	assert.Error(t, err)
+}
+
 func TestUpdateWebhookStatus(t *testing.T) {
 	database := setupTestDB(t)
 	wh := sampleWebhook(100, 0)

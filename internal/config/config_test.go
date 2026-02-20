@@ -85,10 +85,11 @@ func TestWhitelistChatIDs_Single(t *testing.T) {
 }
 
 func TestWebhookBaseDomain(t *testing.T) {
-	viper.Set("webhook.base_domain", "https://example.com")
+	// Value should be a bare domain (no protocol) since WebhookURL prepends "https://".
+	viper.Set("webhook.base_domain", "example.com")
 	defer viper.Reset()
 
-	assert.Equal(t, "https://example.com", WebhookBaseDomain())
+	assert.Equal(t, "example.com", WebhookBaseDomain())
 }
 
 func TestWebhookBaseDomain_Empty(t *testing.T) {

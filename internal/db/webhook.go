@@ -26,9 +26,16 @@ func ListWebhooksByChat(database *gorm.DB, chatID int64, threadID int) ([]model.
 	return webhooks, err
 }
 
-// DeleteWebhook removes a webhook by ID.
+// DeleteWebhook removes a webhook by ID. Returns gorm.ErrRecordNotFound if the ID does not exist.
 func DeleteWebhook(database *gorm.DB, id string) error {
-	return database.Where("id = ?", id).Delete(&model.WebhookRegistration{}).Error
+	result := database.Where("id = ?", id).Delete(&model.WebhookRegistration{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // UpdateWebhookStatus sets the status of a webhook.

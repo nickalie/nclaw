@@ -16,6 +16,7 @@ type Server struct {
 func NewServer(manager *Manager) *Server {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
+		BodyLimit:             256 * 1024, // 256KB max body for webhook payloads
 	})
 
 	s := &Server{
@@ -50,6 +51,9 @@ func (s *Server) handleWebhook(c *fiber.Ctx) error {
 	}
 
 	if err := s.manager.HandleIncoming(id, req); err != nil {
+		if err.Error() == "too many concurrent requests" {
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
@@ -59,7 +63,12 @@ func (s *Server) handleWebhook(c *fiber.Ctx) error {
 func extractHeaders(c *fiber.Ctx) map[string]string {
 	headers := make(map[string]string)
 	c.Request().Header.VisitAll(func(key, value []byte) {
-		headers[string(key)] = string(value)
+		k := string(key)
+		if existing, ok := headers[k]; ok {
+			headers[k] = existing + ", " + string(value)
+		} else {
+			headers[k] = string(value)
+		}
 	})
 	return headers
 }

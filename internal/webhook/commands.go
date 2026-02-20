@@ -6,6 +6,8 @@ import (
 	"log"
 	"regexp"
 	"strings"
+
+	"github.com/nickalie/nclaw/internal/db"
 )
 
 var webhookBlockRe = regexp.MustCompile("(?s)```nclaw:webhook\n(.*?)\n```")
@@ -62,7 +64,7 @@ func (m *Manager) executeCommand(jsonStr string, chatID int64, threadID int) (st
 	case "create":
 		return m.createFromCommand(cmd.Description, chatID, threadID)
 	case "delete":
-		return m.deleteFromCommand(cmd.WebhookID)
+		return m.deleteFromCommand(cmd.WebhookID, chatID, threadID)
 	case "list":
 		return m.listFromCommand(chatID, threadID)
 	default:
@@ -81,9 +83,16 @@ func (m *Manager) createFromCommand(description string, chatID int64, threadID i
 	return fmt.Sprintf("[Webhook created: %s]", m.WebhookURL(webhook.ID)), nil
 }
 
-func (m *Manager) deleteFromCommand(webhookID string) (string, error) {
+func (m *Manager) deleteFromCommand(webhookID string, chatID int64, threadID int) (string, error) {
 	if webhookID == "" {
 		return "", fmt.Errorf("delete requires webhook_id")
+	}
+	wh, err := db.GetWebhookByID(m.db, webhookID)
+	if err != nil {
+		return "", fmt.Errorf("webhook not found: %w", err)
+	}
+	if wh.ChatID != chatID || wh.ThreadID != threadID {
+		return "", fmt.Errorf("webhook %s does not belong to this chat", webhookID)
 	}
 	if err := m.Delete(webhookID); err != nil {
 		return "", err

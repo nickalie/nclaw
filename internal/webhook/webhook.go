@@ -28,12 +28,15 @@ type IncomingRequest struct {
 	Body    string
 }
 
+const maxConcurrentWebhooks = 5
+
 // Manager handles webhook registration and incoming webhook processing.
 type Manager struct {
 	db         *gorm.DB
 	send       SendFunc
 	baseDomain string
 	dataDir    string
+	sem        chan struct{}
 }
 
 // NewManager creates a new webhook Manager.
@@ -43,6 +46,7 @@ func NewManager(database *gorm.DB, send SendFunc, baseDomain, dataDir string) *M
 		send:       send,
 		baseDomain: baseDomain,
 		dataDir:    dataDir,
+		sem:        make(chan struct{}, maxConcurrentWebhooks),
 	}
 }
 
@@ -93,7 +97,16 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 	}
 
 	log.Printf("webhook: incoming request for %s method=%s", webhookID, req.Method)
-	go m.processIncoming(webhook, req)
+	select {
+	case m.sem <- struct{}{}:
+		go func() {
+			defer func() { <-m.sem }()
+			m.processIncoming(webhook, req)
+		}()
+	default:
+		log.Printf("webhook: concurrency limit reached for %s", webhookID)
+		return errors.New("too many concurrent requests")
+	}
 	return nil
 }
 
@@ -103,6 +116,7 @@ func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req Incomi
 	dir := webhookChatDir(m.dataDir, webhook.ChatID, webhook.ThreadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("webhook: mkdir %s: %v", dir, err)
+		return
 	}
 
 	if err := claude.EnsureValidToken(); err != nil {
