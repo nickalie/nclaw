@@ -75,9 +75,9 @@ Add a GoFiber-based HTTP server that runs alongside the Telegram bot, enabling C
 - Create: `.claude/skills/webhook/SKILL.md`
 - Modify: `Dockerfile`
 
-- [ ] Write SKILL.md documenting the `nclaw:webhook` code block format with actions (create, delete, list), fields, and examples
-- [ ] Add skill copy to Dockerfile alongside existing schedule and send-file skills
-- [ ] Verify skill is correctly referenced
+- [x] Write SKILL.md documenting the `nclaw:webhook` code block format with actions (create, delete, list), fields, and examples
+- [x] Add skill copy to Dockerfile alongside existing schedule and send-file skills
+- [x] Verify skill is correctly referenced
 
 ### Task 6: Verify acceptance criteria
 
