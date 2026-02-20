@@ -12,7 +12,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/telegram"
 	"github.com/nickalie/nclaw/internal/webhook"
 )
 
@@ -204,7 +206,7 @@ func TestChatDir_NoThread(t *testing.T) {
 	viper.Set("data_dir", "/data")
 	defer viper.Reset()
 
-	dir := chatDir(12345, 0)
+	dir := telegram.ChatDir(config.DataDir(), 12345, 0)
 	assert.Equal(t, "/data/12345", dir)
 }
 
@@ -212,7 +214,7 @@ func TestChatDir_WithThread(t *testing.T) {
 	viper.Set("data_dir", "/data")
 	defer viper.Reset()
 
-	dir := chatDir(12345, 99)
+	dir := telegram.ChatDir(config.DataDir(), 12345, 99)
 	assert.Equal(t, "/data/12345/99", dir)
 }
 

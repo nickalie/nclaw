@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -15,6 +15,7 @@ import (
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/telegram"
 )
 
 // SendFunc sends a text message to a Telegram chat/thread with an optional parse mode.
@@ -37,20 +38,13 @@ var (
 
 const maxConcurrentWebhooks = 5
 
-const telegramPrompt = `IMPORTANT: Your output will be displayed in Telegram.
-Format all responses using Telegram HTML. Supported tags:
-<b>bold</b>, <i>italic</i>, <u>underline</u>, <s>strikethrough</s>,
-<code>inline code</code>, <pre>code block</pre>, <pre><code class="language-go">code with language</code></pre>,
-<a href="URL">link</a>, <blockquote>quote</blockquote>, <tg-spoiler>spoiler</tg-spoiler>
-
-Rules:
-- Do NOT use Markdown syntax (no #headers, no **bold**, no backticks for code)
-- Use ONLY the HTML tags listed above. No other HTML tags are supported.
-- Escape &, < and > in regular text as &amp; &lt; &gt; (but not inside tags themselves)
-- Do NOT use <p>, <br>, <div>, <h1>-<h6>, <ul>, <li>, <ol>, <table>, or any other HTML tags
-- For lists, use plain text with bullet characters or numbers
-- For section titles, use <b>bold text</b> on its own line
-- Keep formatting minimal and clean`
+// sensitiveHeaders are HTTP headers that should not be forwarded to Claude.
+var sensitiveHeaders = map[string]bool{
+	"Authorization":       true,
+	"Cookie":              true,
+	"Set-Cookie":          true,
+	"Proxy-Authorization": true,
+}
 
 // Manager handles webhook registration and incoming webhook processing.
 type Manager struct {
@@ -59,6 +53,7 @@ type Manager struct {
 	baseDomain string
 	dataDir    string
 	sem        chan struct{}
+	wg         sync.WaitGroup
 }
 
 // NewManager creates a new webhook Manager.
@@ -107,6 +102,11 @@ func (m *Manager) WebhookURL(webhookID string) string {
 	return fmt.Sprintf("https://%s/webhooks/%s", m.baseDomain, webhookID)
 }
 
+// Wait blocks until all in-flight webhook goroutines have finished.
+func (m *Manager) Wait() {
+	m.wg.Wait()
+}
+
 // HandleIncoming looks up a webhook by ID and processes the request asynchronously.
 // Returns a sentinel error if the webhook is not found, inactive, or rate-limited.
 // Returns a wrapped error for unexpected failures (e.g. database issues).
@@ -125,7 +125,9 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 	log.Printf("webhook: incoming request for %s method=%s", webhookID, req.Method)
 	select {
 	case m.sem <- struct{}{}:
+		m.wg.Add(1)
 		go func() {
+			defer m.wg.Done()
 			defer func() { <-m.sem }()
 			m.processIncoming(webhook, req)
 		}()
@@ -139,7 +141,7 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req IncomingRequest) {
 	prompt := buildIncomingPrompt(webhook, req)
 
-	dir := webhookChatDir(m.dataDir, webhook.ChatID, webhook.ThreadID)
+	dir := telegram.ChatDir(m.dataDir, webhook.ChatID, webhook.ThreadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("webhook: mkdir %s: %v", dir, err)
 		return
@@ -149,13 +151,15 @@ func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req Incomi
 		log.Printf("webhook: token refresh warning: %v", err)
 	}
 
-	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(telegramPrompt).Continue(prompt)
+	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(telegram.Prompt).Continue(prompt)
 	if err != nil {
 		log.Printf("webhook: claude error for %s: %v", webhook.ID, err)
 		if reply == "" {
-			reply = "Webhook processing error: " + err.Error()
+			reply = "Webhook processing failed"
 		}
 	}
+
+	reply = StripBlocks(reply)
 
 	if reply == "" {
 		return
@@ -167,10 +171,8 @@ func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req Incomi
 	m.sendReply(ctx, webhook.ChatID, webhook.ThreadID, reply)
 }
 
-const maxMessageLen = 4096
-
 func (m *Manager) sendReply(ctx context.Context, chatID int64, threadID int, text string) {
-	for _, chunk := range splitMessage(text, maxMessageLen) {
+	for _, chunk := range telegram.SplitMessage(text, telegram.MaxMessageLen) {
 		m.sendChunk(ctx, chatID, threadID, chunk)
 	}
 }
@@ -188,27 +190,6 @@ func (m *Manager) sendChunk(ctx context.Context, chatID int64, threadID int, tex
 	log.Printf("webhook: failed to send message to chat=%d thread=%d: %v", chatID, threadID, lastErr)
 }
 
-func splitMessage(text string, maxLen int) []string {
-	if len(text) <= maxLen {
-		return []string{text}
-	}
-
-	var chunks []string
-	for text != "" {
-		if len(text) <= maxLen {
-			chunks = append(chunks, text)
-			break
-		}
-		cut := strings.LastIndex(text[:maxLen], "\n")
-		if cut <= 0 {
-			cut = maxLen
-		}
-		chunks = append(chunks, text[:cut])
-		text = strings.TrimLeft(text[cut:], "\n")
-	}
-	return chunks
-}
-
 func buildIncomingPrompt(webhook *model.WebhookRegistration, req IncomingRequest) string {
 	var b strings.Builder
 	b.WriteString("[WEBHOOK REQUEST - Incoming HTTP request to your registered webhook]\n\n")
@@ -218,6 +199,9 @@ func buildIncomingPrompt(webhook *model.WebhookRegistration, req IncomingRequest
 	if len(req.Headers) > 0 {
 		b.WriteString("Headers:\n")
 		for k, v := range req.Headers {
+			if sensitiveHeaders[k] {
+				continue
+			}
 			fmt.Fprintf(&b, "  %s: %s\n", k, v)
 		}
 	}
@@ -234,12 +218,4 @@ func buildIncomingPrompt(webhook *model.WebhookRegistration, req IncomingRequest
 	}
 
 	return b.String()
-}
-
-func webhookChatDir(dataDir string, chatID int64, threadID int) string {
-	dir := filepath.Join(dataDir, fmt.Sprintf("%d", chatID))
-	if threadID != 0 {
-		dir = filepath.Join(dir, fmt.Sprintf("%d", threadID))
-	}
-	return dir
 }

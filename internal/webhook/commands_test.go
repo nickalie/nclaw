@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +11,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/telegram"
 )
 
 func setupTestManager(t *testing.T) *Manager {
@@ -224,6 +224,29 @@ func TestBuildIncomingPrompt(t *testing.T) {
 	assert.Contains(t, prompt, `{"event":"push"}`)
 }
 
+func TestBuildIncomingPrompt_FiltersSensitiveHeaders(t *testing.T) {
+	wh := &model.WebhookRegistration{Description: "auth test"}
+	req := IncomingRequest{
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type":        "application/json",
+			"Authorization":       "Bearer secret-token",
+			"Cookie":              "session=abc",
+			"Set-Cookie":          "id=xyz",
+			"Proxy-Authorization": "Basic creds",
+			"X-Custom":            "safe-value",
+		},
+	}
+
+	prompt := buildIncomingPrompt(wh, req)
+	assert.Contains(t, prompt, "Content-Type: application/json")
+	assert.Contains(t, prompt, "X-Custom: safe-value")
+	assert.NotContains(t, prompt, "secret-token")
+	assert.NotContains(t, prompt, "session=abc")
+	assert.NotContains(t, prompt, "id=xyz")
+	assert.NotContains(t, prompt, "Basic creds")
+}
+
 func TestBuildIncomingPrompt_Minimal(t *testing.T) {
 	wh := &model.WebhookRegistration{Description: "simple"}
 	req := IncomingRequest{Method: "GET"}
@@ -236,13 +259,13 @@ func TestBuildIncomingPrompt_Minimal(t *testing.T) {
 	assert.NotContains(t, prompt, "Body:")
 }
 
-func TestWebhookChatDir_NoThread(t *testing.T) {
-	dir := webhookChatDir("/data", 123, 0)
+func TestChatDir_NoThread(t *testing.T) {
+	dir := telegram.ChatDir("/data", 123, 0)
 	assert.Equal(t, "/data/123", dir)
 }
 
-func TestWebhookChatDir_WithThread(t *testing.T) {
-	dir := webhookChatDir("/data", 123, 456)
+func TestChatDir_WithThread(t *testing.T) {
+	dir := telegram.ChatDir("/data", 123, 456)
 	assert.Equal(t, "/data/123/456", dir)
 }
 
@@ -263,28 +286,28 @@ func TestHandleIncoming_NotFound_SentinelError(t *testing.T) {
 }
 
 func TestSplitMessage_Short(t *testing.T) {
-	chunks := splitMessage("hello", 100)
+	chunks := telegram.SplitMessage("hello", 100)
 	assert.Equal(t, []string{"hello"}, chunks)
 }
 
 func TestSplitMessage_ExactLimit(t *testing.T) {
-	text := strings.Repeat("a", 100)
-	chunks := splitMessage(text, 100)
+	text := "aaaaaaaaaa" // 10 chars
+	chunks := telegram.SplitMessage(text, 10)
 	assert.Equal(t, []string{text}, chunks)
 }
 
 func TestSplitMessage_SplitsAtNewline(t *testing.T) {
-	text := strings.Repeat("a", 50) + "\n" + strings.Repeat("b", 50)
-	chunks := splitMessage(text, 60)
+	text := "aaaaa\nbbbbb" // 5 + newline + 5
+	chunks := telegram.SplitMessage(text, 6)
 	assert.Len(t, chunks, 2)
-	assert.Equal(t, strings.Repeat("a", 50), chunks[0])
-	assert.Equal(t, strings.Repeat("b", 50), chunks[1])
+	assert.Equal(t, "aaaaa", chunks[0])
+	assert.Equal(t, "bbbbb", chunks[1])
 }
 
 func TestSplitMessage_NoNewline(t *testing.T) {
-	text := strings.Repeat("a", 200)
-	chunks := splitMessage(text, 100)
+	text := "aaaaaaaaaabbbbbbbbbb" // 20 chars
+	chunks := telegram.SplitMessage(text, 10)
 	assert.Len(t, chunks, 2)
-	assert.Equal(t, strings.Repeat("a", 100), chunks[0])
-	assert.Equal(t, strings.Repeat("a", 100), chunks[1])
+	assert.Equal(t, "aaaaaaaaaa", chunks[0])
+	assert.Equal(t, "bbbbbbbbbb", chunks[1])
 }

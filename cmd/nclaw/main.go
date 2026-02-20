@@ -51,11 +51,12 @@ func main() {
 	h.Scheduler = sched
 
 	var webhookSrv *webhook.Server
+	var webhookMgr *webhook.Manager
 	if domain := config.WebhookBaseDomain(); domain != "" {
-		mgr := webhook.NewManager(database, newWebhookSendFunc(b), domain, config.DataDir())
-		h.WebhookManager = mgr
+		webhookMgr = webhook.NewManager(database, newWebhookSendFunc(b), domain, config.DataDir())
+		h.WebhookManager = webhookMgr
 
-		webhookSrv = webhook.NewServer(mgr)
+		webhookSrv = webhook.NewServer(webhookMgr)
 		go func() {
 			if err := webhookSrv.Listen(config.WebhookPort()); err != nil {
 				log.Printf("webhook server stopped: %v", err)
@@ -66,7 +67,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	defer sched.Shutdown()
-	defer shutdownWebhook(webhookSrv)
+	defer shutdownWebhook(webhookSrv, webhookMgr)
 
 	log.Printf("nclaw bot started (%s)", version.String())
 	sendStartupNotifications(b)
@@ -120,11 +121,13 @@ func newWebhookSendFunc(b *bot.Bot) webhook.SendFunc {
 	}
 }
 
-func shutdownWebhook(srv *webhook.Server) {
-	if srv == nil {
-		return
+func shutdownWebhook(srv *webhook.Server, mgr *webhook.Manager) {
+	if srv != nil {
+		if err := srv.Shutdown(); err != nil {
+			log.Printf("webhook shutdown: %v", err)
+		}
 	}
-	if err := srv.Shutdown(); err != nil {
-		log.Printf("webhook shutdown: %v", err)
+	if mgr != nil {
+		mgr.Wait()
 	}
 }

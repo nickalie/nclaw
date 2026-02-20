@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/go-telegram/bot"
@@ -16,23 +14,9 @@ import (
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/scheduler"
+	"github.com/nickalie/nclaw/internal/telegram"
 	"github.com/nickalie/nclaw/internal/webhook"
 )
-
-const telegramPrompt = `IMPORTANT: Your output will be displayed in Telegram.
-Format all responses using Telegram HTML. Supported tags:
-<b>bold</b>, <i>italic</i>, <u>underline</u>, <s>strikethrough</s>,
-<code>inline code</code>, <pre>code block</pre>, <pre><code class="language-go">code with language</code></pre>,
-<a href="URL">link</a>, <blockquote>quote</blockquote>, <tg-spoiler>spoiler</tg-spoiler>
-
-Rules:
-- Do NOT use Markdown syntax (no #headers, no **bold**, no backticks for code)
-- Use ONLY the HTML tags listed above. No other HTML tags are supported.
-- Escape &, < and > in regular text as &amp; &lt; &gt; (but not inside tags themselves)
-- Do NOT use <p>, <br>, <div>, <h1>-<h6>, <ul>, <li>, <ol>, <table>, or any other HTML tags
-- For lists, use plain text with bullet characters or numbers
-- For section titles, use <b>bold text</b> on its own line
-- Keep formatting minimal and clean`
 
 // Handler processes incoming Telegram messages.
 type Handler struct {
@@ -67,7 +51,7 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 
 	chatID := msg.Chat.ID
 	threadID := msg.MessageThreadID
-	dir := chatDir(chatID, threadID)
+	dir := telegram.ChatDir(config.DataDir(), chatID, threadID)
 	ensureDir(dir)
 
 	typingCtx, stopTyping := context.WithCancel(ctx)
@@ -149,7 +133,7 @@ func buildPrompt(ctx context.Context, b *bot.Bot, text string, att *attachment, 
 
 func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) string {
 	taskPrompt := h.Scheduler.FormatTaskList(chatID, threadID)
-	systemPrompt := telegramPrompt + "\n\n" + taskPrompt
+	systemPrompt := telegram.Prompt + "\n\n" + taskPrompt
 
 	if err := claude.EnsureValidToken(); err != nil {
 		log.Printf("handler: token refresh warning: %v", err)
@@ -196,26 +180,16 @@ func isChatAllowed(chatID int64) bool {
 	return slices.Contains(config.WhitelistChatIDs(), chatID)
 }
 
-func chatDir(chatID int64, threadID int) string {
-	base := filepath.Join(config.DataDir(), fmt.Sprintf("%d", chatID))
-	if threadID != 0 {
-		return filepath.Join(base, fmt.Sprintf("%d", threadID))
-	}
-	return base
-}
-
 func ensureDir(dir string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("failed to create dir %s: %v", dir, err)
 	}
 }
 
-const maxMessageLen = 4096
-
 func sendReply(ctx context.Context, b *bot.Bot, chatID int64, threadID int, text string) {
 	log.Printf("handler: sending reply len=%d", len(text))
 
-	for _, chunk := range splitMessage(text, maxMessageLen) {
+	for _, chunk := range telegram.SplitMessage(text, telegram.MaxMessageLen) {
 		sendChunk(ctx, b, chatID, threadID, chunk)
 	}
 }
@@ -234,30 +208,4 @@ func sendChunk(ctx context.Context, b *bot.Bot, chatID int64, threadID int, text
 		}
 		log.Printf("handler: SendMessage parseMode=%q error: %v", mode, err)
 	}
-}
-
-// splitMessage splits text into chunks of at most maxLen characters, breaking at newlines.
-func splitMessage(text string, maxLen int) []string {
-	if len(text) <= maxLen {
-		return []string{text}
-	}
-
-	var chunks []string
-
-	for text != "" {
-		if len(text) <= maxLen {
-			chunks = append(chunks, text)
-			break
-		}
-
-		cut := strings.LastIndex(text[:maxLen], "\n")
-		if cut <= 0 {
-			cut = maxLen
-		}
-
-		chunks = append(chunks, text[:cut])
-		text = strings.TrimLeft(text[cut:], "\n")
-	}
-
-	return chunks
 }
