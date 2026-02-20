@@ -108,11 +108,15 @@ func (m *Manager) WebhookURL(webhookID string) string {
 }
 
 // HandleIncoming looks up a webhook by ID and processes the request asynchronously.
-// Returns an error if the webhook is not found or inactive (caller should return 404).
+// Returns a sentinel error if the webhook is not found, inactive, or rate-limited.
+// Returns a wrapped error for unexpected failures (e.g. database issues).
 func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 	webhook, err := db.GetWebhookByID(m.db, webhookID)
 	if err != nil {
-		return ErrWebhookNotFound
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrWebhookNotFound
+		}
+		return fmt.Errorf("webhook: lookup %s: %w", webhookID, err)
 	}
 	if webhook.Status != model.WebhookStatusActive {
 		return ErrWebhookInactive
@@ -172,12 +176,16 @@ func (m *Manager) sendReply(ctx context.Context, chatID int64, threadID int, tex
 }
 
 func (m *Manager) sendChunk(ctx context.Context, chatID int64, threadID int, text string) {
+	var lastErr error
 	for _, mode := range []string{"HTML", ""} {
 		if err := m.send(ctx, chatID, threadID, text, mode); err == nil {
 			return
+		} else {
+			lastErr = err
+			log.Printf("webhook: send parseMode=%q error: %v", mode, err)
 		}
-		log.Printf("webhook: send parseMode=%q error, trying fallback", mode)
 	}
+	log.Printf("webhook: failed to send message to chat=%d thread=%d: %v", chatID, threadID, lastErr)
 }
 
 func splitMessage(text string, maxLen int) []string {

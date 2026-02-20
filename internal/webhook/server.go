@@ -55,7 +55,11 @@ func (s *Server) handleWebhook(c *fiber.Ctx) error {
 		if errors.Is(err, ErrTooManyRequests) {
 			return c.SendStatus(fiber.StatusTooManyRequests)
 		}
-		return c.SendStatus(fiber.StatusNotFound)
+		if errors.Is(err, ErrWebhookNotFound) || errors.Is(err, ErrWebhookInactive) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		log.Printf("webhook: handle incoming %s: %v", id, err)
+		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
 	return c.SendStatus(fiber.StatusOK)

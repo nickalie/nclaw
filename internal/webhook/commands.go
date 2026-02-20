@@ -43,10 +43,10 @@ func (m *Manager) ProcessReply(reply string, chatID int64, threadID int) string 
 	cleaned = strings.TrimSpace(cleaned)
 
 	if len(results) > 0 {
-		cleaned += "\n\n" + strings.Join(results, "\n")
+		cleaned = appendSection(cleaned, strings.Join(results, "\n"))
 	}
 	if len(errs) > 0 {
-		cleaned += "\n\n[Webhook error: " + strings.Join(errs, "; ") + "]"
+		cleaned = appendSection(cleaned, "[Webhook error: "+strings.Join(errs, "; ")+"]")
 	}
 
 	return cleaned
@@ -98,6 +98,13 @@ func (m *Manager) deleteFromCommand(webhookID string, chatID int64, threadID int
 		return "", err
 	}
 	return fmt.Sprintf("[Webhook deleted: %s]", webhookID), nil
+}
+
+func appendSection(base, section string) string {
+	if base == "" {
+		return section
+	}
+	return base + "\n\n" + section
 }
 
 func (m *Manager) listFromCommand(chatID int64, threadID int) (string, error) {

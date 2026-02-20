@@ -58,7 +58,7 @@ func main() {
 		webhookSrv = webhook.NewServer(mgr)
 		go func() {
 			if err := webhookSrv.Listen(config.WebhookPort()); err != nil {
-				log.Fatalf("webhook server: %v", err)
+				log.Printf("webhook server stopped: %v", err)
 			}
 		}()
 	}
