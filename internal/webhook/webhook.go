@@ -150,28 +150,7 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 }
 
 func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req IncomingRequest) {
-	unlock := m.chatLocker.Lock(webhook.ChatID, webhook.ThreadID)
-	defer unlock()
-
-	prompt := buildIncomingPrompt(webhook, req)
-
-	dir := telegram.ChatDir(m.dataDir, webhook.ChatID, webhook.ThreadID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		log.Printf("webhook: mkdir %s: %v", dir, err)
-		return
-	}
-
-	if err := claude.EnsureValidToken(); err != nil {
-		log.Printf("webhook: token refresh warning: %v", err)
-	}
-
-	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(telegram.Prompt).Continue(prompt)
-	if err != nil {
-		log.Printf("webhook: claude error for %s: %v", webhook.ID, err)
-		if reply == "" {
-			reply = "Webhook processing failed"
-		}
-	}
+	reply := m.callClaude(webhook, req)
 
 	reply = webhookBlockRe.ReplaceAllString(reply, "")
 	reply = scheduler.StripBlocks(reply)
@@ -185,6 +164,33 @@ func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req Incomi
 	defer cancel()
 
 	m.sendReply(ctx, webhook.ChatID, webhook.ThreadID, reply)
+}
+
+func (m *Manager) callClaude(webhook *model.WebhookRegistration, req IncomingRequest) string {
+	unlock := m.chatLocker.Lock(webhook.ChatID, webhook.ThreadID)
+	defer unlock()
+
+	prompt := buildIncomingPrompt(webhook, req)
+
+	dir := telegram.ChatDir(m.dataDir, webhook.ChatID, webhook.ThreadID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		log.Printf("webhook: mkdir %s: %v", dir, err)
+		return ""
+	}
+
+	if err := claude.EnsureValidToken(); err != nil {
+		log.Printf("webhook: token refresh warning: %v", err)
+	}
+
+	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(telegram.Prompt).Continue(prompt)
+	if err != nil {
+		log.Printf("webhook: claude error for %s: %v", webhook.ID, err)
+		if reply == "" {
+			return "Webhook processing failed"
+		}
+	}
+
+	return reply
 }
 
 func (m *Manager) sendReply(ctx context.Context, chatID int64, threadID int, text string) {

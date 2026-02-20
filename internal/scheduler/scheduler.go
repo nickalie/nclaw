@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -250,7 +249,7 @@ func (s *Scheduler) executeTask(taskID string) {
 
 	start := time.Now()
 
-	dir := taskDir(s.dataDir, task.ChatID, task.ThreadID)
+	dir := telegram.ChatDir(s.dataDir, task.ChatID, task.ThreadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("scheduler: mkdir %s: %v", dir, err)
 	}
@@ -324,14 +323,6 @@ func (s *Scheduler) invokeClaudeForTask(task *model.ScheduledTask, dir, prompt s
 	return c.Ask(prompt)
 }
 
-func taskDir(dataDir string, chatID int64, threadID int) string {
-	dir := filepath.Join(dataDir, fmt.Sprintf("%d", chatID))
-	if threadID != 0 {
-		dir = filepath.Join(dir, fmt.Sprintf("%d", threadID))
-	}
-	return dir
-}
-
 // recordResults atomically verifies the task still exists and records the run outcome.
 // Returns gorm.ErrRecordNotFound if the task was deleted (e.g. canceled during execution).
 func (s *Scheduler) recordResults(task *model.ScheduledTask, reply string, runErr error, duration time.Duration) error {
@@ -403,6 +394,7 @@ func (s *Scheduler) sendResult(task *model.ScheduledTask, reply string, runErr e
 
 	// Process any schedule commands embedded in the reply (e.g. cancel self).
 	text = s.ProcessReply(text, task.ChatID, task.ThreadID)
+	text = strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
 
 	if text == "" {
 		return
