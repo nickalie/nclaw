@@ -260,15 +260,19 @@ func setupTestWebhookManager(t *testing.T) *webhook.Manager {
 	return webhook.NewManager(database, send, "example.com", t.TempDir())
 }
 
-func TestHandlerWebhookManager_NilDoesNotPanic(t *testing.T) {
+func TestHandlerWebhookManager_NilStripsBlocks(t *testing.T) {
 	h := &Handler{}
 	// Simulating what callClaude does after getting a reply from Claude.
-	// With nil WebhookManager, webhook blocks pass through unchanged.
+	// With nil WebhookManager, webhook blocks are stripped (not executed).
 	reply := "text\n```nclaw:webhook\n{\"action\":\"list\"}\n```\nmore"
 	if h.WebhookManager != nil {
 		reply = h.WebhookManager.ProcessReply(reply, 100, 0)
+	} else {
+		reply = webhook.StripBlocks(reply)
 	}
-	assert.Contains(t, reply, "nclaw:webhook")
+	assert.NotContains(t, reply, "nclaw:webhook")
+	assert.Contains(t, reply, "text")
+	assert.Contains(t, reply, "more")
 }
 
 func TestHandlerWebhookManager_ProcessesBlocks(t *testing.T) {

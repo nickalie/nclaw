@@ -168,6 +168,8 @@ func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) str
 	reply = h.Scheduler.ProcessReply(reply, chatID, threadID)
 	if h.WebhookManager != nil {
 		reply = h.WebhookManager.ProcessReply(reply, chatID, threadID)
+	} else {
+		reply = webhook.StripBlocks(reply)
 	}
 	return reply
 }

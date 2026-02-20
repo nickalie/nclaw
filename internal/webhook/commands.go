@@ -12,6 +12,12 @@ import (
 
 var webhookBlockRe = regexp.MustCompile("(?s)```nclaw:webhook\n(.*?)\n```")
 
+// StripBlocks removes nclaw:webhook code blocks from text without executing them.
+// Used when the webhook manager is not configured.
+func StripBlocks(text string) string {
+	return strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
+}
+
 type webhookCommand struct {
 	Action      string `json:"action"`
 	Description string `json:"description"`
@@ -92,7 +98,7 @@ func (m *Manager) deleteFromCommand(webhookID string, chatID int64, threadID int
 		return "", fmt.Errorf("webhook not found: %w", err)
 	}
 	if wh.ChatID != chatID || wh.ThreadID != threadID {
-		return "", fmt.Errorf("webhook %s does not belong to this chat", webhookID)
+		return "", fmt.Errorf("webhook not found: %s", webhookID)
 	}
 	if err := m.Delete(webhookID); err != nil {
 		return "", err
