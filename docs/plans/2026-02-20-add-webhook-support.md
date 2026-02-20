@@ -50,12 +50,12 @@ Add a GoFiber-based HTTP server that runs alongside the Telegram bot, enabling C
 - Create: `internal/webhook/webhook.go` - Webhook manager (create/delete/list, incoming processing)
 - Create: `internal/webhook/commands.go` - Parse `nclaw:webhook` code blocks from Claude replies
 
-- [ ] Implement `Server` struct wrapping a Fiber app with route `ALL /webhooks/:uuid`
-- [ ] Implement `Manager` struct holding DB, bot reference, and config; methods: `Create`, `Delete`, `List`, `HandleIncoming`
-- [ ] In `HandleIncoming`: look up webhook by UUID, return 404 if not found or inactive, return 200 immediately, then in a goroutine: build prompt containing request method, headers, query params, body, and webhook description; call `claude.EnsureValidToken()` then invoke Claude CLI with `Continue()` in the webhook's chat directory; send Claude's response to the originating Telegram chat
-- [ ] Implement `ProcessWebhookCommands` following `scheduler/commands.go` pattern: regex-extract `nclaw:webhook` JSON code blocks, support actions `create` (returns webhook URL), `delete`, `list`; clean code blocks from reply text
-- [ ] Write tests for command parsing and webhook creation logic
-- [ ] Run project test suite - must pass before task 4
+- [x] Implement `Server` struct wrapping a Fiber app with route `ALL /webhooks/:uuid`
+- [x] Implement `Manager` struct holding DB, bot reference, and config; methods: `Create`, `Delete`, `List`, `HandleIncoming`
+- [x] In `HandleIncoming`: look up webhook by UUID, return 404 if not found or inactive, return 200 immediately, then in a goroutine: build prompt containing request method, headers, query params, body, and webhook description; call `claude.EnsureValidToken()` then invoke Claude CLI with `Continue()` in the webhook's chat directory; send Claude's response to the originating Telegram chat
+- [x] Implement `ProcessWebhookCommands` following `scheduler/commands.go` pattern: regex-extract `nclaw:webhook` JSON code blocks, support actions `create` (returns webhook URL), `delete`, `list`; clean code blocks from reply text
+- [x] Write tests for command parsing and webhook creation logic
+- [x] Run project test suite - must pass before task 4
 
 ### Task 4: Integration in main.go and handler
 
