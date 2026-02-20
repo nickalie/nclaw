@@ -16,6 +16,7 @@ import (
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/scheduler"
+	"github.com/nickalie/nclaw/internal/webhook"
 )
 
 const telegramPrompt = `IMPORTANT: Your output will be displayed in Telegram.
@@ -35,7 +36,8 @@ Rules:
 
 // Handler processes incoming Telegram messages.
 type Handler struct {
-	Scheduler *scheduler.Scheduler
+	Scheduler      *scheduler.Scheduler
+	WebhookManager *webhook.Manager
 }
 
 // Default handles incoming messages by forwarding them to Claude Code.
@@ -163,7 +165,11 @@ func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) str
 		}
 	}
 
-	return h.Scheduler.ProcessReply(reply, chatID, threadID)
+	reply = h.Scheduler.ProcessReply(reply, chatID, threadID)
+	if h.WebhookManager != nil {
+		reply = h.WebhookManager.ProcessReply(reply, chatID, threadID)
+	}
+	return reply
 }
 
 func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {

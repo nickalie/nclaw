@@ -63,11 +63,11 @@ Add a GoFiber-based HTTP server that runs alongside the Telegram bot, enabling C
 - Modify: `cmd/nclaw/main.go`
 - Modify: `internal/handler/handler.go`
 
-- [ ] In `main.go`: create webhook Manager, create webhook Server, start Fiber server in a goroutine, add graceful shutdown (call `app.Shutdown()` on context cancellation)
-- [ ] Add webhook Manager to `Handler` struct; call `ProcessWebhookCommands` on Claude replies alongside existing schedule/sendfile processing
-- [ ] Ensure webhook command results (e.g., created URL) are included in the reply sent to the user
-- [ ] Write/update tests for handler webhook command integration
-- [ ] Run project test suite - must pass before task 5
+- [x] In `main.go`: create webhook Manager, create webhook Server, start Fiber server in a goroutine, add graceful shutdown (call `app.Shutdown()` on context cancellation)
+- [x] Add webhook Manager to `Handler` struct; call `ProcessWebhookCommands` on Claude replies alongside existing schedule/sendfile processing
+- [x] Ensure webhook command results (e.g., created URL) are included in the reply sent to the user
+- [x] Write/update tests for handler webhook command integration
+- [x] Run project test suite - must pass before task 5
 
 ### Task 5: Webhook skill for Claude
 

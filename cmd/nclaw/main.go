@@ -14,6 +14,7 @@ import (
 	"github.com/nickalie/nclaw/internal/handler"
 	"github.com/nickalie/nclaw/internal/scheduler"
 	"github.com/nickalie/nclaw/internal/version"
+	"github.com/nickalie/nclaw/internal/webhook"
 )
 
 func main() {
@@ -48,9 +49,23 @@ func main() {
 
 	h.Scheduler = sched
 
+	var webhookSrv *webhook.Server
+	if domain := config.WebhookBaseDomain(); domain != "" {
+		mgr := webhook.NewManager(database, newWebhookSendFunc(b), domain, config.DataDir())
+		h.WebhookManager = mgr
+
+		webhookSrv = webhook.NewServer(mgr)
+		go func() {
+			if err := webhookSrv.Listen(config.WebhookPort()); err != nil {
+				log.Printf("webhook server: %v", err)
+			}
+		}()
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	defer sched.Shutdown()
+	defer shutdownWebhook(webhookSrv)
 
 	log.Printf("nclaw bot started (%s)", version.String())
 	sendStartupNotifications(b)
@@ -86,5 +101,25 @@ func newSendFunc(b *bot.Bot) scheduler.SendFunc {
 			Text:            text,
 		})
 		return err
+	}
+}
+
+func newWebhookSendFunc(b *bot.Bot) webhook.SendFunc {
+	return func(ctx context.Context, chatID int64, threadID int, text string) error {
+		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			Text:            text,
+		})
+		return err
+	}
+}
+
+func shutdownWebhook(srv *webhook.Server) {
+	if srv == nil {
+		return
+	}
+	if err := srv.Shutdown(); err != nil {
+		log.Printf("webhook shutdown: %v", err)
 	}
 }
