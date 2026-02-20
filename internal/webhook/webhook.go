@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/scheduler"
+	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
 
@@ -40,8 +40,6 @@ var (
 
 const maxConcurrentWebhooks = 5
 
-var sendFileBlockRe = regexp.MustCompile("(?s)```nclaw:sendfile\n(.*?)\n```")
-
 // sensitiveHeaders are HTTP headers that should not be forwarded to Claude.
 // Keys are stored in lowercase for case-insensitive matching.
 var sensitiveHeaders = map[string]bool{
@@ -59,6 +57,7 @@ var sensitiveSubstrings = []string{"token", "secret", "signature", "api-key", "a
 type Manager struct {
 	db         *gorm.DB
 	send       SendFunc
+	sendDoc    sendfile.SendDocFunc
 	baseDomain string
 	dataDir    string
 	sem        chan struct{}
@@ -67,10 +66,14 @@ type Manager struct {
 }
 
 // NewManager creates a new webhook Manager.
-func NewManager(database *gorm.DB, send SendFunc, baseDomain, dataDir string, chatLocker *telegram.ChatLocker) *Manager {
+func NewManager(
+	database *gorm.DB, send SendFunc, sendDoc sendfile.SendDocFunc,
+	baseDomain, dataDir string, chatLocker *telegram.ChatLocker,
+) *Manager {
 	return &Manager{
 		db:         database,
 		send:       send,
+		sendDoc:    sendDoc,
 		baseDomain: baseDomain,
 		dataDir:    dataDir,
 		sem:        make(chan struct{}, maxConcurrentWebhooks),
@@ -149,21 +152,23 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 	return nil
 }
 
-func (m *Manager) processIncoming(webhook *model.WebhookRegistration, req IncomingRequest) {
-	reply := m.callClaude(webhook, req)
+func (m *Manager) processIncoming(wh *model.WebhookRegistration, req IncomingRequest) {
+	reply := m.callClaude(wh, req)
 
 	reply = webhookBlockRe.ReplaceAllString(reply, "")
 	reply = scheduler.StripBlocks(reply)
-	reply = strings.TrimSpace(sendFileBlockRe.ReplaceAllString(reply, ""))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	dir := telegram.ChatDir(m.dataDir, wh.ChatID, wh.ThreadID)
+	reply = sendfile.ProcessReply(ctx, m.sendDoc, reply, wh.ChatID, wh.ThreadID, dir)
 
 	if reply == "" {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	m.sendReply(ctx, webhook.ChatID, webhook.ThreadID, reply)
+	m.sendReply(ctx, wh.ChatID, wh.ThreadID, reply)
 }
 
 func (m *Manager) callClaude(webhook *model.WebhookRegistration, req IncomingRequest) string {

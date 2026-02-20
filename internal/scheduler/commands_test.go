@@ -22,7 +22,7 @@ func setupTestScheduler(t *testing.T) *Scheduler {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(&model.ScheduledTask{}, &model.TaskRunLog{}))
 
-	sched, err := New(database, nil, "UTC", t.TempDir(), telegram.NewChatLocker())
+	sched, err := New(database, nil, nil, "UTC", t.TempDir(), telegram.NewChatLocker())
 	require.NoError(t, err)
 	return sched
 }

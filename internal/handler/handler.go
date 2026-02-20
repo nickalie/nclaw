@@ -14,6 +14,7 @@ import (
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/scheduler"
+	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
 	"github.com/nickalie/nclaw/internal/webhook"
 )
@@ -68,7 +69,7 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	unlock()
 	stopTyping()
 
-	reply = processSendFiles(ctx, b, reply, chatID, threadID, dir)
+	reply = sendfile.ProcessReply(ctx, newSendDocFunc(b), reply, chatID, threadID, dir)
 
 	if reply != "" {
 		sendReply(ctx, b, chatID, threadID, reply)

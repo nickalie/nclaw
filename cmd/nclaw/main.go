@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/handler"
 	"github.com/nickalie/nclaw/internal/scheduler"
+	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
 	"github.com/nickalie/nclaw/internal/version"
 	"github.com/nickalie/nclaw/internal/webhook"
@@ -44,7 +46,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sched, err := scheduler.New(database, newSendFunc(b), config.Timezone(), config.DataDir(), chatLocker)
+	sendDoc := newSendDocFunc(b)
+	sched, err := scheduler.New(database, newSendFunc(b), sendDoc, config.Timezone(), config.DataDir(), chatLocker)
 	if err != nil {
 		log.Fatal("scheduler: ", err)
 	}
@@ -53,7 +56,7 @@ func main() {
 
 	h.Scheduler = sched
 
-	webhookSrv, webhookMgr := startWebhooks(database, b, chatLocker)
+	webhookSrv, webhookMgr := startWebhooks(database, b, sendDoc, chatLocker)
 	h.WebhookManager = webhookMgr
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -87,6 +90,18 @@ func sendStartupNotifications(b *bot.Bot) {
 	}
 }
 
+func newSendDocFunc(b *bot.Bot) sendfile.SendDocFunc {
+	return func(ctx context.Context, chatID int64, threadID int, filename string, data []byte, caption string) error {
+		_, err := b.SendDocument(ctx, &bot.SendDocumentParams{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			Document:        &models.InputFileUpload{Filename: filename, Data: bytes.NewReader(data)},
+			Caption:         caption,
+		})
+		return err
+	}
+}
+
 func newSendFunc(b *bot.Bot) scheduler.SendFunc {
 	return func(ctx context.Context, chatID int64, threadID int, text string) error {
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
@@ -113,13 +128,15 @@ func newWebhookSendFunc(b *bot.Bot) webhook.SendFunc {
 	}
 }
 
-func startWebhooks(database *gorm.DB, b *bot.Bot, chatLocker *telegram.ChatLocker) (*webhook.Server, *webhook.Manager) {
+func startWebhooks(
+	database *gorm.DB, b *bot.Bot, sendDoc sendfile.SendDocFunc, chatLocker *telegram.ChatLocker,
+) (*webhook.Server, *webhook.Manager) {
 	domain := config.WebhookBaseDomain()
 	if domain == "" {
 		return nil, nil
 	}
 
-	mgr := webhook.NewManager(database, newWebhookSendFunc(b), domain, config.DataDir(), chatLocker)
+	mgr := webhook.NewManager(database, newWebhookSendFunc(b), sendDoc, domain, config.DataDir(), chatLocker)
 	srv := webhook.NewServer(mgr)
 
 	listenErr := make(chan error, 1)
