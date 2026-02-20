@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/telegram"
 )
 
 // SendFunc sends a text message to a Telegram chat/thread.
@@ -25,19 +25,20 @@ type SendFunc func(ctx context.Context, chatID int64, threadID int, text string)
 
 // Scheduler manages scheduled tasks using gocron and SQLite persistence.
 type Scheduler struct {
-	cron     gocron.Scheduler
-	db       *gorm.DB
-	send     SendFunc
-	dataDir  string
-	loc      *time.Location
-	jobs     map[string]uuid.UUID // taskID -> gocron job UUID
-	running  map[string]bool      // tasks currently executing
-	canceled map[string]bool      // tasks canceled during execution
-	mu       sync.Mutex
+	cron       gocron.Scheduler
+	db         *gorm.DB
+	send       SendFunc
+	dataDir    string
+	loc        *time.Location
+	chatLocker *telegram.ChatLocker
+	jobs       map[string]uuid.UUID // taskID -> gocron job UUID
+	running    map[string]bool      // tasks currently executing
+	canceled   map[string]bool      // tasks canceled during execution
+	mu         sync.Mutex
 }
 
 // New creates a new Scheduler.
-func New(database *gorm.DB, send SendFunc, timezone, dataDir string) (*Scheduler, error) {
+func New(database *gorm.DB, send SendFunc, timezone, dataDir string, chatLocker *telegram.ChatLocker) (*Scheduler, error) {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
 		log.Printf("scheduler: invalid timezone %q, falling back to local: %v", timezone, err)
@@ -50,14 +51,15 @@ func New(database *gorm.DB, send SendFunc, timezone, dataDir string) (*Scheduler
 	}
 
 	return &Scheduler{
-		cron:     cron,
-		db:       database,
-		send:     send,
-		dataDir:  dataDir,
-		loc:      loc,
-		jobs:     make(map[string]uuid.UUID),
-		running:  make(map[string]bool),
-		canceled: make(map[string]bool),
+		cron:       cron,
+		db:         database,
+		send:       send,
+		dataDir:    dataDir,
+		loc:        loc,
+		chatLocker: chatLocker,
+		jobs:       make(map[string]uuid.UUID),
+		running:    make(map[string]bool),
+		canceled:   make(map[string]bool),
 	}, nil
 }
 
@@ -247,7 +249,7 @@ func (s *Scheduler) executeTask(taskID string) {
 
 	start := time.Now()
 
-	dir := taskDir(s.dataDir, task.ChatID, task.ThreadID)
+	dir := telegram.ChatDir(s.dataDir, task.ChatID, task.ThreadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("scheduler: mkdir %s: %v", dir, err)
 	}
@@ -310,20 +312,15 @@ func (s *Scheduler) invokeClaudeForTask(task *model.ScheduledTask, dir, prompt s
 		log.Printf("scheduler: token refresh warning: %v", err)
 	}
 
+	unlock := s.chatLocker.Lock(task.ChatID, task.ThreadID)
+	defer unlock()
+
 	log.Printf("scheduler: invoking claude for task %s in dir=%s context=%s", task.ID, dir, task.ContextMode)
 	c := claude.New().Dir(dir).SkipPermissions()
 	if task.ContextMode == model.ContextGroup {
 		return c.Continue(prompt)
 	}
 	return c.Ask(prompt)
-}
-
-func taskDir(dataDir string, chatID int64, threadID int) string {
-	dir := filepath.Join(dataDir, fmt.Sprintf("%d", chatID))
-	if threadID != 0 {
-		dir = filepath.Join(dir, fmt.Sprintf("%d", threadID))
-	}
-	return dir
 }
 
 // recordResults atomically verifies the task still exists and records the run outcome.
@@ -397,6 +394,7 @@ func (s *Scheduler) sendResult(task *model.ScheduledTask, reply string, runErr e
 
 	// Process any schedule commands embedded in the reply (e.g. cancel self).
 	text = s.ProcessReply(text, task.ChatID, task.ThreadID)
+	text = strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
 
 	if text == "" {
 		return

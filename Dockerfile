@@ -68,6 +68,7 @@ COPY --from=builder /build/nclaw /usr/local/bin/nclaw
 # Copy skills globally for Claude Code
 COPY .claude/skills/schedule /root/.claude/skills/schedule
 COPY .claude/skills/send-file /root/.claude/skills/send-file
+COPY .claude/skills/webhook /root/.claude/skills/webhook
 
 WORKDIR /app
 
