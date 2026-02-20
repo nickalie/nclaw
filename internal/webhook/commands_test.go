@@ -23,7 +23,7 @@ func setupTestManager(t *testing.T) *Manager {
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
 	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
-	return NewManager(database, send, "example.com", t.TempDir())
+	return NewManager(database, send, "example.com", t.TempDir(), telegram.NewChatLocker())
 }
 
 func TestWebhookBlockRegex(t *testing.T) {
@@ -247,6 +247,44 @@ func TestBuildIncomingPrompt_FiltersSensitiveHeaders(t *testing.T) {
 	assert.NotContains(t, prompt, "Basic creds")
 }
 
+func TestBuildIncomingPrompt_FiltersPatternHeaders(t *testing.T) {
+	wh := &model.WebhookRegistration{Description: "pattern test"}
+	req := IncomingRequest{
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type":      "application/json",
+			"Stripe-Signature":  "t=123,v1=abc",
+			"X-Slack-Signature": "v0=hash",
+			"X-Gitlab-Token":    "glpat-xxx",
+			"X-Request-Id":      "req-123",
+		},
+	}
+
+	prompt := buildIncomingPrompt(wh, req)
+	assert.Contains(t, prompt, "Content-Type: application/json")
+	assert.Contains(t, prompt, "X-Request-Id: req-123")
+	assert.NotContains(t, prompt, "t=123,v1=abc")
+	assert.NotContains(t, prompt, "v0=hash")
+	assert.NotContains(t, prompt, "glpat-xxx")
+}
+
+func TestIsSensitiveHeader(t *testing.T) {
+	sensitive := []string{
+		"Authorization", "Cookie", "Set-Cookie", "Proxy-Authorization",
+		"X-Api-Key", "X-Api-Token", "X-Auth-Token", "X-Secret",
+		"X-Hub-Signature", "X-Hub-Signature-256", "X-Webhook-Secret",
+		"Stripe-Signature", "X-Slack-Signature", "X-Gitlab-Token",
+	}
+	for _, h := range sensitive {
+		assert.True(t, isSensitiveHeader(h), "expected %q to be sensitive", h)
+	}
+
+	safe := []string{"Content-Type", "Accept", "X-Request-Id", "User-Agent", "Host"}
+	for _, h := range safe {
+		assert.False(t, isSensitiveHeader(h), "expected %q to be safe", h)
+	}
+}
+
 func TestBuildIncomingPrompt_Minimal(t *testing.T) {
 	wh := &model.WebhookRegistration{Description: "simple"}
 	req := IncomingRequest{Method: "GET"}
@@ -283,6 +321,25 @@ func TestHandleIncoming_NotFound_SentinelError(t *testing.T) {
 	m := setupTestManager(t)
 	err := m.HandleIncoming("nonexistent", IncomingRequest{Method: "GET"})
 	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestHandleIncoming_Busy(t *testing.T) {
+	m := setupTestManager(t)
+	wh, err := m.Create("busy hook", 100, 0)
+	require.NoError(t, err)
+
+	// Fill the semaphore to capacity.
+	for range maxConcurrentWebhooks {
+		m.sem <- struct{}{}
+	}
+
+	err = m.HandleIncoming(wh.ID, IncomingRequest{Method: "POST"})
+	assert.ErrorIs(t, err, ErrWebhookBusy)
+
+	// Drain semaphore.
+	for range maxConcurrentWebhooks {
+		<-m.sem
+	}
 }
 
 func TestSplitMessage_Short(t *testing.T) {

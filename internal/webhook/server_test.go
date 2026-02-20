@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/telegram"
 )
 
 func setupTestServer(t *testing.T) (*Server, *Manager) {
@@ -26,7 +27,7 @@ func setupTestServer(t *testing.T) (*Server, *Manager) {
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
 	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
-	mgr := NewManager(database, send, "example.com", t.TempDir())
+	mgr := NewManager(database, send, "example.com", t.TempDir(), telegram.NewChatLocker())
 	srv := NewServer(mgr)
 	return srv, mgr
 }
@@ -137,6 +138,30 @@ func TestExtractHeaders(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestServer_WebhookRoute_Busy(t *testing.T) {
+	srv, mgr := setupTestServer(t)
+
+	wh, err := mgr.Create("busy hook", 100, 0)
+	require.NoError(t, err)
+
+	// Fill the semaphore to capacity.
+	for range maxConcurrentWebhooks {
+		mgr.sem <- struct{}{}
+	}
+	defer func() {
+		for range maxConcurrentWebhooks {
+			<-mgr.sem
+		}
+	}()
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+wh.ID, nil)
+	resp, err := srv.app.Test(req, -1)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 }
 
 func TestServer_ResponseBody(t *testing.T) {

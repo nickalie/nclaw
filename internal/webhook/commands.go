@@ -12,10 +12,14 @@ import (
 
 var webhookBlockRe = regexp.MustCompile("(?s)```nclaw:webhook\n(.*?)\n```")
 
-// StripBlocks removes nclaw:webhook code blocks from text without executing them.
+// StripBlocks removes nclaw:webhook code blocks from text and appends a warning if any were found.
 // Used when the webhook manager is not configured.
 func StripBlocks(text string) string {
-	return strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
+	if !webhookBlockRe.MatchString(text) {
+		return text
+	}
+	cleaned := strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
+	return appendSection(cleaned, "[Webhooks are not configured on this instance]")
 }
 
 type webhookCommand struct {

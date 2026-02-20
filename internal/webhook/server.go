@@ -2,7 +2,9 @@ package webhook
 
 import (
 	"errors"
+	"fmt"
 	"log"
+	"net"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -31,9 +33,14 @@ func NewServer(manager *Manager) *Server {
 }
 
 // Listen starts the HTTP server on the given address.
+// It pre-validates that the address can be bound before starting the server.
 func (s *Server) Listen(addr string) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("webhook: bind %s: %w", addr, err)
+	}
 	log.Printf("webhook: server listening on %s", addr)
-	return s.app.Listen(addr)
+	return s.app.Listener(ln)
 }
 
 // Shutdown gracefully stops the HTTP server.
@@ -52,11 +59,11 @@ func (s *Server) handleWebhook(c *fiber.Ctx) error {
 	}
 
 	if err := s.manager.HandleIncoming(id, req); err != nil {
-		if errors.Is(err, ErrTooManyRequests) {
-			return c.SendStatus(fiber.StatusTooManyRequests)
-		}
 		if errors.Is(err, ErrWebhookNotFound) || errors.Is(err, ErrWebhookInactive) {
 			return c.SendStatus(fiber.StatusNotFound)
+		}
+		if errors.Is(err, ErrWebhookBusy) {
+			return c.SendStatus(fiber.StatusTooManyRequests)
 		}
 		log.Printf("webhook: handle incoming %s: %v", id, err)
 		return c.SendStatus(fiber.StatusInternalServerError)
