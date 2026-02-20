@@ -64,7 +64,7 @@ Talk naturally to create scheduled tasks:
 ```
 Remind me to take a break every 2 hours
 Every morning at 8am, give me a weather summary and top news headlines
-At 6pm on Friday, create a meal plan for the weekend
+At 3pm today, generate a summary of today's git commits
 ```
 
 Tasks persist across restarts. Each task can either continue the existing chat session or run in a fresh isolated context.
@@ -74,8 +74,9 @@ Tasks persist across restarts. Each task can either continue the existing chat s
 Register HTTP endpoints that forward incoming requests to Claude:
 
 ```
-Create a webhook that receives smart home events and notifies me about unusual activity
+Create a webhook that receives GitHub push events and summarizes the changes
 Set up a webhook for my package tracking updates
+Listen for smart home alerts and notify me about unusual activity
 ```
 
 When an external service calls the webhook URL, the request (method, headers, query params, body) is forwarded to Claude in the originating chat. The HTTP endpoint returns 200 immediately; Claude processes the request asynchronously. Webhooks persist across restarts.
