@@ -18,6 +18,8 @@ env:
   telegramBotToken: ""
   # Comma-separated allowed chat IDs
   whitelistChatIds: ""
+  # Base domain for webhook URLs
+  webhookBaseDomain: ""
 
 # Reference an existing secret for sensitive env vars
 # Secret must contain key "telegram-bot-token"
