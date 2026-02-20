@@ -83,3 +83,30 @@ func TestWhitelistChatIDs_Single(t *testing.T) {
 	ids := WhitelistChatIDs()
 	assert.Equal(t, []int64{42}, ids)
 }
+
+func TestWebhookBaseDomain(t *testing.T) {
+	// Value should be a bare domain (no protocol) since WebhookURL prepends "https://".
+	viper.Set("webhook.base_domain", "example.com")
+	defer viper.Reset()
+
+	assert.Equal(t, "example.com", WebhookBaseDomain())
+}
+
+func TestWebhookBaseDomain_Empty(t *testing.T) {
+	viper.Reset()
+
+	assert.Equal(t, "", WebhookBaseDomain())
+}
+
+func TestWebhookPort_Default(t *testing.T) {
+	viper.Reset()
+
+	assert.Equal(t, ":3000", WebhookPort())
+}
+
+func TestWebhookPort_Override(t *testing.T) {
+	viper.Set("webhook.port", ":8080")
+	defer viper.Reset()
+
+	assert.Equal(t, ":8080", WebhookPort())
+}

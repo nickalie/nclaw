@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/telegram"
 )
 
 func setupTestScheduler(t *testing.T) *Scheduler {
@@ -21,7 +22,7 @@ func setupTestScheduler(t *testing.T) *Scheduler {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(&model.ScheduledTask{}, &model.TaskRunLog{}))
 
-	sched, err := New(database, nil, "UTC", t.TempDir())
+	sched, err := New(database, nil, "UTC", t.TempDir(), telegram.NewChatLocker())
 	require.NoError(t, err)
 	return sched
 }

@@ -7,6 +7,15 @@ import (
 	"github.com/go-telegram/bot/models"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	"github.com/nickalie/nclaw/internal/config"
+	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/telegram"
+	"github.com/nickalie/nclaw/internal/webhook"
 )
 
 func TestWithReplyContext_NoReply(t *testing.T) {
@@ -197,7 +206,7 @@ func TestChatDir_NoThread(t *testing.T) {
 	viper.Set("data_dir", "/data")
 	defer viper.Reset()
 
-	dir := chatDir(12345, 0)
+	dir := telegram.ChatDir(config.DataDir(), 12345, 0)
 	assert.Equal(t, "/data/12345", dir)
 }
 
@@ -205,7 +214,7 @@ func TestChatDir_WithThread(t *testing.T) {
 	viper.Set("data_dir", "/data")
 	defer viper.Reset()
 
-	dir := chatDir(12345, 99)
+	dir := telegram.ChatDir(config.DataDir(), 12345, 99)
 	assert.Equal(t, "/data/12345/99", dir)
 }
 
@@ -239,4 +248,63 @@ func TestSendFileBlockRegex_Multiple(t *testing.T) {
 	assert.Len(t, matches, 2)
 	assert.Equal(t, "{\"path\":\"a.txt\"}", matches[0][1])
 	assert.Equal(t, "{\"path\":\"b.txt\"}", matches[1][1])
+}
+
+func setupTestWebhookManager(t *testing.T) *webhook.Manager {
+	t.Helper()
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
+
+	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
+	return webhook.NewManager(database, send, "example.com", t.TempDir(), telegram.NewChatLocker())
+}
+
+func TestHandlerWebhookManager_NilStripsBlocks(t *testing.T) {
+	h := &Handler{}
+	// Simulating what callClaude does after getting a reply from Claude.
+	// With nil WebhookManager, webhook blocks are stripped (not executed).
+	reply := "text\n```nclaw:webhook\n{\"action\":\"list\"}\n```\nmore"
+	if h.WebhookManager != nil {
+		reply = h.WebhookManager.ProcessReply(reply, 100, 0)
+	} else {
+		reply = webhook.StripBlocks(reply)
+	}
+	assert.NotContains(t, reply, "nclaw:webhook")
+	assert.Contains(t, reply, "text")
+	assert.Contains(t, reply, "more")
+}
+
+func TestHandlerWebhookManager_ProcessesBlocks(t *testing.T) {
+	mgr := setupTestWebhookManager(t)
+	h := &Handler{WebhookManager: mgr}
+
+	reply := "Here you go.\n```nclaw:webhook\n" +
+		`{"action":"create","description":"test hook"}` +
+		"\n```\nDone!"
+
+	// Simulate the webhook processing step from callClaude.
+	if h.WebhookManager != nil {
+		reply = h.WebhookManager.ProcessReply(reply, 100, 0)
+	}
+
+	assert.NotContains(t, reply, "nclaw:webhook")
+	assert.Contains(t, reply, "Here you go.")
+	assert.Contains(t, reply, "Done!")
+	assert.Contains(t, reply, "[Webhook created: https://example.com/webhooks/")
+}
+
+func TestHandlerWebhookManager_ListEmpty(t *testing.T) {
+	mgr := setupTestWebhookManager(t)
+	h := &Handler{WebhookManager: mgr}
+
+	reply := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
+	if h.WebhookManager != nil {
+		reply = h.WebhookManager.ProcessReply(reply, 100, 0)
+	}
+
+	assert.Contains(t, reply, "[No webhooks registered]")
+	assert.NotContains(t, reply, "nclaw:webhook")
 }

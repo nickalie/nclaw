@@ -7,6 +7,7 @@ Telegram bot that wraps the Claude Code CLI. Users message a Telegram bot, which
 ```
 Telegram -> Handler -> Claude Code CLI (via go-binwrapper) -> Telegram
                     -> Scheduler (gocron + SQLite) for recurring/one-time tasks
+                    -> Webhook Manager (GoFiber HTTP server) for incoming HTTP callbacks
 ```
 
 ## Project Structure
@@ -15,9 +16,10 @@ Telegram -> Handler -> Claude Code CLI (via go-binwrapper) -> Telegram
 - `internal/config/` - Viper-based config (env prefix `NCLAW_`, `.env` support, optional `config.yaml`)
 - `internal/handler/` - Telegram message handling, file attachments, reply context, sendfile processing
 - `internal/claude/` - Claude Code CLI wrapper using `go-binwrapper` (fluent builder API), plus OAuth token refresh
-- `internal/model/` - GORM models: `ScheduledTask`, `TaskRunLog`
+- `internal/model/` - GORM models: `ScheduledTask`, `TaskRunLog`, `WebhookRegistration`
 - `internal/db/` - Database operations (SQLite with WAL mode)
 - `internal/scheduler/` - Task scheduling via `gocron`, command parsing from Claude replies
+- `internal/webhook/` - GoFiber HTTP server, webhook manager, and command parsing from Claude replies
 - `data/` - Runtime data directory (gitignored)
 
 ## Key Patterns
@@ -30,6 +32,9 @@ Before each CLI invocation (in handler and scheduler), `claude.EnsureValidToken(
 
 ### Scheduled Tasks
 Claude's replies are scanned for `nclaw:schedule` code blocks containing JSON commands (`create`, `pause`, `resume`, `cancel`). Tasks support cron, interval, and one-time schedules. Tasks persist in SQLite and reload on startup.
+
+### Webhooks
+Claude's replies are scanned for `nclaw:webhook` code blocks containing JSON commands (`create`, `delete`, `list`). Webhooks register HTTP endpoints at `https://{BASE_DOMAIN}/webhooks/{UUID}`. When an external service calls a webhook URL, the request (method, headers, query params, body) is forwarded to Claude in the originating chat via `Continue()`. The HTTP server returns 200 immediately; Claude processing happens asynchronously in a goroutine. Webhooks persist in SQLite alongside scheduled tasks.
 
 ### File Handling
 - **Inbound**: Attachments (documents, photos, audio, video, stickers) are downloaded to the chat directory and referenced in prompts. Files are cached by unique ID and size.
@@ -48,6 +53,8 @@ Required env vars (prefix `NCLAW_`):
 Optional:
 - `NCLAW_DB_PATH` - SQLite path (default: `{data_dir}/nclaw.db`)
 - `NCLAW_TIMEZONE` - Timezone for scheduler (default: system local)
+- `NCLAW_WEBHOOK_BASE_DOMAIN` - Base domain for webhook URLs (required when webhooks enabled)
+- `NCLAW_WEBHOOK_PORT` - Webhook HTTP server listen address (default: `:3000`)
 
 ## Commands
 
@@ -74,6 +81,8 @@ make docker  # Build and run in Docker
 - `github.com/spf13/viper` + `github.com/joho/godotenv` - Configuration
 - `gorm.io/gorm` + `gorm.io/driver/sqlite` - Database
 - `github.com/go-co-op/gocron/v2` - Task scheduling
+- `github.com/gofiber/fiber/v2` - Webhook HTTP server
+- `github.com/google/uuid` - Webhook ID generation
 - `github.com/stretchr/testify` - Testing
 
 ## CI/CD
@@ -85,4 +94,4 @@ GitHub Actions pipeline (`.github/workflows/ci.yml`):
 
 ## Docker
 
-The runtime image (`node:24-alpine` based) includes Claude Code, Go, git, kubectl, flux, kustomize, gh CLI, Chromium, and Python/uv. Claude Code skills (`schedule`, `send-file`) are copied into the global skills directory.
+The runtime image (`node:24-alpine` based) includes Claude Code, Go, git, kubectl, flux, kustomize, gh CLI, Chromium, and Python/uv. Claude Code skills (`schedule`, `send-file`, `webhook`) are copied into the global skills directory.
