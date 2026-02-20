@@ -71,6 +71,10 @@ spec:
             - name: NCLAW_TELEGRAM_WHITELIST_CHAT_IDS
               value: {{ .Values.env.whitelistChatIds | quote }}
             {{- end }}
+            {{- if .Values.env.webhookBaseDomain }}
+            - name: NCLAW_WEBHOOK_BASE_DOMAIN
+              value: {{ .Values.env.webhookBaseDomain | quote }}
+            {{- end }}
             {{- if .Values.proxy.enabled }}
             - name: HTTP_PROXY
               value: {{ .Values.proxy.httpProxy | quote }}
