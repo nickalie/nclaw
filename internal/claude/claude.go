@@ -187,37 +187,42 @@ func (c *Claude) Env(vars []string) *Claude {
 	return c
 }
 
-// Ask sends a query in print mode and returns the response text.
-func (c *Claude) Ask(query string) (string, error) {
+// Ask sends a query in print mode and returns the response.
+// Uses stream-json output to capture all assistant messages across multi-turn execution.
+func (c *Claude) Ask(query string) (*Result, error) {
+	c.outputFormat = FormatStreamJSON
 	c.prepare("-p")
-
-	if err := c.bin.Run(query); err != nil {
-		return strings.TrimSpace(string(c.bin.CombinedOutput())), fmt.Errorf("claude: %w", err)
-	}
-
-	return strings.TrimSpace(string(c.bin.StdOut())), nil
+	return c.runAndParse(query)
 }
 
 // Continue sends a query continuing the most recent conversation in the current directory.
-func (c *Claude) Continue(query string) (string, error) {
+// Uses stream-json output to capture all assistant messages across multi-turn execution.
+func (c *Claude) Continue(query string) (*Result, error) {
+	c.outputFormat = FormatStreamJSON
 	c.prepare("-c", "-p")
-
-	if err := c.bin.Run(query); err != nil {
-		return strings.TrimSpace(string(c.bin.CombinedOutput())), fmt.Errorf("claude: %w", err)
-	}
-
-	return strings.TrimSpace(string(c.bin.StdOut())), nil
+	return c.runAndParse(query)
 }
 
 // Resume sends a query resuming a specific session by ID or name.
-func (c *Claude) Resume(session, query string) (string, error) {
+// Uses stream-json output to capture all assistant messages across multi-turn execution.
+func (c *Claude) Resume(session, query string) (*Result, error) {
+	c.outputFormat = FormatStreamJSON
 	c.prepare("-r", session, "-p")
+	return c.runAndParse(query)
+}
 
+// runAndParse executes the CLI and parses stream-json output into a Result.
+func (c *Claude) runAndParse(query string) (*Result, error) {
 	if err := c.bin.Run(query); err != nil {
-		return strings.TrimSpace(string(c.bin.CombinedOutput())), fmt.Errorf("claude: %w", err)
+		result := parseStreamOutput(c.bin.StdOut())
+		if result.Text == "" && result.FullText == "" {
+			text := strings.TrimSpace(string(c.bin.CombinedOutput()))
+			result = &Result{Text: text, FullText: text}
+		}
+		return result, fmt.Errorf("claude: %w", err)
 	}
 
-	return strings.TrimSpace(string(c.bin.StdOut())), nil
+	return parseStreamOutput(c.bin.StdOut()), nil
 }
 
 // Version returns the Claude CLI version string.

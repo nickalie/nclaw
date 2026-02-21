@@ -12,6 +12,11 @@ import (
 
 var webhookBlockRe = regexp.MustCompile("(?s)```nclaw:webhook\n(.*?)\n```")
 
+// StripBlocksClean removes nclaw:webhook code blocks from text without appending any warning.
+func StripBlocksClean(text string) string {
+	return strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
+}
+
 // StripBlocks removes nclaw:webhook code blocks from text and appends a warning if any were found.
 // Used when the webhook manager is not configured.
 func StripBlocks(text string) string {
@@ -26,6 +31,36 @@ type webhookCommand struct {
 	Action      string `json:"action"`
 	Description string `json:"description"`
 	WebhookID   string `json:"webhook_id"`
+}
+
+// ExecuteBlocks extracts nclaw:webhook code blocks from text, executes them,
+// and returns any status/error messages. Does not modify the input text.
+func (m *Manager) ExecuteBlocks(text string, chatID int64, threadID int) string {
+	matches := webhookBlockRe.FindAllStringSubmatch(text, -1)
+	if len(matches) == 0 {
+		return ""
+	}
+
+	var results, errs []string
+
+	for _, match := range matches {
+		result, err := m.executeCommand(match[1], chatID, threadID)
+		if err != nil {
+			log.Printf("webhook: command error: %v", err)
+			errs = append(errs, err.Error())
+		} else if result != "" {
+			results = append(results, result)
+		}
+	}
+
+	var msgs []string
+	if len(results) > 0 {
+		msgs = append(msgs, strings.Join(results, "\n"))
+	}
+	if len(errs) > 0 {
+		msgs = append(msgs, "[Webhook error: "+strings.Join(errs, "; ")+"]")
+	}
+	return strings.Join(msgs, "\n\n")
 }
 
 // ProcessReply extracts nclaw:webhook code blocks from a reply, executes them, and returns cleaned text.

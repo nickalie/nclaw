@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-telegram/bot"
@@ -66,14 +67,17 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	log.Printf("handler: received message from chat=%d thread=%d text=%q hasFile=%v", chatID, threadID, text, att != nil)
 
 	unlock := h.ChatLocker.Lock(chatID, threadID)
-	reply := h.callClaude(dir, prompt, chatID, threadID)
+	result := h.callClaude(dir, prompt, chatID, threadID)
 	unlock()
 	stopTyping()
 
-	reply = sendfile.ProcessReply(ctx, h.SendDoc, reply, chatID, threadID, dir)
+	// Process sendfile blocks from ALL assistant messages (FullText),
+	// then strip them from display text (Text).
+	sendfile.ProcessReply(ctx, h.SendDoc, result.FullText, chatID, threadID, dir)
+	displayText := sendfile.StripBlocks(result.Text)
 
-	if reply != "" {
-		sendReply(ctx, b, chatID, threadID, reply)
+	if displayText != "" {
+		sendReply(ctx, b, chatID, threadID, displayText)
 	}
 }
 
@@ -136,7 +140,7 @@ func buildPrompt(ctx context.Context, b *bot.Bot, text string, att *attachment, 
 	return prompt
 }
 
-func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) string {
+func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) *claude.Result {
 	taskPrompt := h.Scheduler.FormatTaskList(chatID, threadID)
 	systemPrompt := telegram.Prompt + "\n\n" + taskPrompt
 
@@ -145,22 +149,44 @@ func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) str
 	}
 
 	log.Printf("handler: calling claude.Continue in dir=%s", dir)
-	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(systemPrompt).Continue(prompt)
+	result, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(systemPrompt).Continue(prompt)
 
 	if err != nil {
 		log.Printf("handler: claude error: %v", err)
-		if reply == "" {
-			reply = "error: " + err.Error()
+		if result.Text == "" {
+			result = &claude.Result{Text: "error: " + err.Error(), FullText: "error: " + err.Error()}
 		}
 	}
 
-	reply = h.Scheduler.ProcessReply(reply, chatID, threadID)
+	// Execute command blocks from ALL assistant messages (FullText).
+	schedMsg := h.Scheduler.ExecuteBlocks(result.FullText, chatID, threadID)
+	var webhookMsg string
 	if h.WebhookManager != nil {
-		reply = h.WebhookManager.ProcessReply(reply, chatID, threadID)
-	} else {
-		reply = webhook.StripBlocks(reply)
+		webhookMsg = h.WebhookManager.ExecuteBlocks(result.FullText, chatID, threadID)
 	}
-	return reply
+
+	// Strip command blocks from display text (final message only).
+	result.Text = scheduler.StripBlocks(result.Text)
+	if h.WebhookManager != nil {
+		result.Text = webhook.StripBlocksClean(result.Text)
+	} else {
+		result.Text = webhook.StripBlocks(result.Text)
+	}
+
+	// Append status messages from block execution.
+	result.Text = appendStatus(result.Text, schedMsg, webhookMsg)
+
+	return result
+}
+
+func appendStatus(text, schedMsg, webhookMsg string) string {
+	if schedMsg != "" {
+		text = strings.TrimSpace(text) + "\n\n" + schedMsg
+	}
+	if webhookMsg != "" {
+		text = strings.TrimSpace(text) + "\n\n" + webhookMsg
+	}
+	return strings.TrimSpace(text)
 }
 
 func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {

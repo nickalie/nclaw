@@ -143,6 +143,61 @@ func TestProcessReply_UnknownAction(t *testing.T) {
 	assert.Contains(t, result, "unknown action")
 }
 
+func TestExecuteBlocks_NoBlocks(t *testing.T) {
+	m := setupTestManager(t)
+	result := m.ExecuteBlocks("plain text", 100, 0)
+	assert.Empty(t, result)
+}
+
+func TestExecuteBlocks_CreateWebhook(t *testing.T) {
+	m := setupTestManager(t)
+	text := "text\n```nclaw:webhook\n" +
+		`{"action":"create","description":"test hook"}` +
+		"\n```\nmore"
+	result := m.ExecuteBlocks(text, 100, 0)
+	assert.Contains(t, result, "[Webhook created: https://example.com/webhooks/")
+
+	webhooks, err := m.List(100, 0)
+	require.NoError(t, err)
+	assert.Len(t, webhooks, 1)
+}
+
+func TestExecuteBlocks_Error(t *testing.T) {
+	m := setupTestManager(t)
+	text := "```nclaw:webhook\n{bad json}\n```"
+	result := m.ExecuteBlocks(text, 100, 0)
+	assert.Contains(t, result, "[Webhook error:")
+}
+
+func TestExecuteBlocks_MixedSuccessAndError(t *testing.T) {
+	m := setupTestManager(t)
+	text := "```nclaw:webhook\n" +
+		`{"action":"create","description":"ok"}` +
+		"\n```\n```nclaw:webhook\n{bad}\n```"
+	result := m.ExecuteBlocks(text, 100, 0)
+	assert.Contains(t, result, "[Webhook created:")
+	assert.Contains(t, result, "[Webhook error:")
+}
+
+func TestStripBlocksClean(t *testing.T) {
+	text := "before\n```nclaw:webhook\n{\"action\":\"list\"}\n```\nafter"
+	result := StripBlocksClean(text)
+	assert.NotContains(t, result, "nclaw:webhook")
+	assert.Contains(t, result, "before")
+	assert.Contains(t, result, "after")
+	assert.NotContains(t, result, "not configured")
+}
+
+func TestStripBlocksClean_NoBlocks(t *testing.T) {
+	assert.Equal(t, "hello", StripBlocksClean("hello"))
+}
+
+func TestStripBlocksClean_Empty(t *testing.T) {
+	text := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
+	result := StripBlocksClean(text)
+	assert.Empty(t, result)
+}
+
 func TestCreate(t *testing.T) {
 	m := setupTestManager(t)
 	wh, err := m.Create("test webhook", 200, 10)

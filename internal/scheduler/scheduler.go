@@ -261,22 +261,22 @@ func (s *Scheduler) executeTask(taskID string) {
 	}
 
 	prompt := "[SCHEDULED TASK - Running automatically, not in response to a user message]\n\n" + task.Prompt
-	reply, runErr := s.invokeClaudeForTask(task, dir, prompt)
+	result, runErr := s.invokeClaudeForTask(task, dir, prompt)
 	duration := time.Since(start)
 
 	if runErr != nil {
 		log.Printf("scheduler: task %s failed after %s: %v", taskID, duration, runErr)
 	} else {
-		log.Printf("scheduler: task %s completed in %s, reply_len=%d", taskID, duration, len(reply))
+		log.Printf("scheduler: task %s completed in %s, reply_len=%d", taskID, duration, len(result.Text))
 	}
 
-	s.finalizeAndSend(task, reply, runErr, duration)
+	s.finalizeAndSend(task, result, runErr, duration)
 }
 
 // finalizeAndSend records run results and sends the reply, unless the task was canceled.
-func (s *Scheduler) finalizeAndSend(task *model.ScheduledTask, reply string, runErr error, duration time.Duration) {
+func (s *Scheduler) finalizeAndSend(task *model.ScheduledTask, result *claude.Result, runErr error, duration time.Duration) {
 	// Atomically verify task still exists and record results.
-	err := s.recordResults(task, reply, runErr, duration)
+	err := s.recordResults(task, result.Text, runErr, duration)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		log.Printf("scheduler: task %s was deleted during execution, skipping send", task.ID)
 		return
@@ -302,7 +302,7 @@ func (s *Scheduler) finalizeAndSend(task *model.ScheduledTask, reply string, run
 		return
 	}
 
-	s.sendResult(task, reply, runErr)
+	s.sendResult(task, result, runErr)
 }
 
 // clearRunState removes the task from both the running and canceled sets.
@@ -313,7 +313,7 @@ func (s *Scheduler) clearRunState(taskID string) {
 	s.mu.Unlock()
 }
 
-func (s *Scheduler) invokeClaudeForTask(task *model.ScheduledTask, dir, prompt string) (string, error) {
+func (s *Scheduler) invokeClaudeForTask(task *model.ScheduledTask, dir, prompt string) (*claude.Result, error) {
 	if err := claude.EnsureValidToken(); err != nil {
 		log.Printf("scheduler: token refresh warning: %v", err)
 	}
@@ -392,21 +392,31 @@ func (s *Scheduler) resolveNextRun(task *model.ScheduledTask) *time.Time {
 	return s.getNextRun(jobID)
 }
 
-func (s *Scheduler) sendResult(task *model.ScheduledTask, reply string, runErr error) {
-	text := reply
+func (s *Scheduler) sendResult(task *model.ScheduledTask, result *claude.Result, runErr error) {
 	if runErr != nil {
-		text = "Scheduled task error: " + runErr.Error()
+		result = &claude.Result{
+			Text:     "Scheduled task error: " + runErr.Error(),
+			FullText: "Scheduled task error: " + runErr.Error(),
+		}
 	}
 
-	// Process any schedule commands embedded in the reply (e.g. cancel self).
-	text = s.ProcessReply(text, task.ChatID, task.ThreadID)
+	// Execute schedule commands from ALL assistant messages (e.g. cancel self).
+	schedMsg := s.ExecuteBlocks(result.FullText, task.ChatID, task.ThreadID)
+
+	// Strip command blocks from display text.
+	text := StripBlocks(result.Text)
 	text = strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
+	if schedMsg != "" {
+		text = strings.TrimSpace(text + "\n\n" + schedMsg)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Process sendfile blocks from ALL assistant messages.
 	dir := telegram.ChatDir(s.dataDir, task.ChatID, task.ThreadID)
-	text = sendfile.ProcessReply(ctx, s.sendDoc, text, task.ChatID, task.ThreadID, dir)
+	sendfile.ProcessReply(ctx, s.sendDoc, result.FullText, task.ChatID, task.ThreadID, dir)
+	text = sendfile.StripBlocks(text)
 
 	if text == "" {
 		return

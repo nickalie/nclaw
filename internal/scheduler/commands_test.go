@@ -146,6 +146,64 @@ func TestProcessReply_DefaultContextMode(t *testing.T) {
 	assert.Equal(t, model.ContextGroup, tasks[0].ContextMode)
 }
 
+func TestExecuteBlocks_NoBlocks(t *testing.T) {
+	s := setupTestScheduler(t)
+	result := s.ExecuteBlocks("plain text", 100, 0)
+	assert.Empty(t, result)
+}
+
+func TestExecuteBlocks_Success(t *testing.T) {
+	s := setupTestScheduler(t)
+	s.Start()
+	defer s.Shutdown()
+
+	text := "text\n```nclaw:schedule\n" +
+		`{"action":"create","prompt":"check weather","type":"interval","value":"1h"}` +
+		"\n```\nmore"
+	result := s.ExecuteBlocks(text, 100, 0)
+	assert.Empty(t, result)
+
+	var tasks []model.ScheduledTask
+	require.NoError(t, s.db.Find(&tasks).Error)
+	assert.Len(t, tasks, 1)
+	assert.Equal(t, "check weather", tasks[0].Prompt)
+}
+
+func TestExecuteBlocks_Error(t *testing.T) {
+	s := setupTestScheduler(t)
+	text := "```nclaw:schedule\n{invalid json}\n```"
+	result := s.ExecuteBlocks(text, 100, 0)
+	assert.Contains(t, result, "[Schedule error:")
+}
+
+func TestExecuteBlocks_MixedSuccessAndError(t *testing.T) {
+	s := setupTestScheduler(t)
+	s.Start()
+	defer s.Shutdown()
+
+	text := "```nclaw:schedule\n" +
+		`{"action":"create","prompt":"ok","type":"interval","value":"1h"}` +
+		"\n```\n```nclaw:schedule\n{bad}\n```"
+	result := s.ExecuteBlocks(text, 100, 0)
+	assert.Contains(t, result, "[Schedule error:")
+
+	var tasks []model.ScheduledTask
+	require.NoError(t, s.db.Find(&tasks).Error)
+	assert.Len(t, tasks, 1)
+}
+
+func TestStripBlocks(t *testing.T) {
+	text := "before\n```nclaw:schedule\n{\"action\":\"create\"}\n```\nafter"
+	result := StripBlocks(text)
+	assert.NotContains(t, result, "nclaw:schedule")
+	assert.Contains(t, result, "before")
+	assert.Contains(t, result, "after")
+}
+
+func TestStripBlocks_NoBlocks(t *testing.T) {
+	assert.Equal(t, "hello", StripBlocks("hello"))
+}
+
 func TestTruncate(t *testing.T) {
 	assert.Equal(t, "hello", truncate("hello", 10))
 	assert.Equal(t, "hello", truncate("hello", 5))
