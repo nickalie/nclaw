@@ -223,33 +223,6 @@ func TestBuildPrompt_NoAttachment(t *testing.T) {
 	assert.Equal(t, "just text", result)
 }
 
-func TestProcessSendFiles_NoMatch(t *testing.T) {
-	result := processSendFiles(context.TODO(), nil, "plain reply", 0, 0, "")
-	assert.Equal(t, "plain reply", result)
-}
-
-func TestProcessSendFiles_StripsBlocks(t *testing.T) {
-	reply := "before\n```nclaw:sendfile\n{\"path\":\"/nonexistent\",\"caption\":\"test\"}\n```\nafter"
-	// sendFile will fail (no bot, file doesn't exist) but the block should still be stripped
-	result := processSendFiles(context.TODO(), nil, reply, 0, 0, "")
-	assert.Equal(t, "before\n\nafter", result)
-}
-
-func TestSendFileBlockRegex(t *testing.T) {
-	input := "text\n```nclaw:sendfile\n{\"path\":\"file.txt\"}\n```\nmore"
-	matches := sendFileBlockRe.FindAllStringSubmatch(input, -1)
-	assert.Len(t, matches, 1)
-	assert.Equal(t, "{\"path\":\"file.txt\"}", matches[0][1])
-}
-
-func TestSendFileBlockRegex_Multiple(t *testing.T) {
-	input := "```nclaw:sendfile\n{\"path\":\"a.txt\"}\n```\nmiddle\n```nclaw:sendfile\n{\"path\":\"b.txt\"}\n```"
-	matches := sendFileBlockRe.FindAllStringSubmatch(input, -1)
-	assert.Len(t, matches, 2)
-	assert.Equal(t, "{\"path\":\"a.txt\"}", matches[0][1])
-	assert.Equal(t, "{\"path\":\"b.txt\"}", matches[1][1])
-}
-
 func setupTestWebhookManager(t *testing.T) *webhook.Manager {
 	t.Helper()
 	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{

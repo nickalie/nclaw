@@ -17,6 +17,7 @@ import (
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
 
@@ -28,6 +29,7 @@ type Scheduler struct {
 	cron       gocron.Scheduler
 	db         *gorm.DB
 	send       SendFunc
+	sendDoc    sendfile.SendDocFunc
 	dataDir    string
 	loc        *time.Location
 	chatLocker *telegram.ChatLocker
@@ -38,7 +40,10 @@ type Scheduler struct {
 }
 
 // New creates a new Scheduler.
-func New(database *gorm.DB, send SendFunc, timezone, dataDir string, chatLocker *telegram.ChatLocker) (*Scheduler, error) {
+func New(
+	database *gorm.DB, send SendFunc, sendDoc sendfile.SendDocFunc,
+	timezone, dataDir string, chatLocker *telegram.ChatLocker,
+) (*Scheduler, error) {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
 		log.Printf("scheduler: invalid timezone %q, falling back to local: %v", timezone, err)
@@ -54,6 +59,7 @@ func New(database *gorm.DB, send SendFunc, timezone, dataDir string, chatLocker 
 		cron:       cron,
 		db:         database,
 		send:       send,
+		sendDoc:    sendDoc,
 		dataDir:    dataDir,
 		loc:        loc,
 		chatLocker: chatLocker,
@@ -396,12 +402,15 @@ func (s *Scheduler) sendResult(task *model.ScheduledTask, reply string, runErr e
 	text = s.ProcessReply(text, task.ChatID, task.ThreadID)
 	text = strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	dir := telegram.ChatDir(s.dataDir, task.ChatID, task.ThreadID)
+	text = sendfile.ProcessReply(ctx, s.sendDoc, text, task.ChatID, task.ThreadID, dir)
+
 	if text == "" {
 		return
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	if err := s.send(ctx, task.ChatID, task.ThreadID, text); err != nil {
 		log.Printf("scheduler: send result for task %s: %v", task.ID, err)

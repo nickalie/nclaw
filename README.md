@@ -104,13 +104,6 @@ make lint    # Lint
 make test    # Run tests (requires CGO)
 ```
 
-## Requirements
-
-- Go 1.25+
-- Docker (for deployment)
-- [Claude Code](https://claude.ai/download) (installed in container via official script)
-- Telegram bot token
-
 ## License
 
 MIT
