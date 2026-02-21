@@ -22,7 +22,6 @@ func TestBuilderChaining(t *testing.T) {
 	assert.Same(t, c, c.Dir("/tmp"))
 	assert.Same(t, c, c.Model("opus"))
 	assert.Same(t, c, c.FallbackModel("sonnet"))
-	assert.Same(t, c, c.OutputFormat(FormatJSON))
 	assert.Same(t, c, c.SystemPrompt("sys"))
 	assert.Same(t, c, c.AppendSystemPrompt("extra"))
 	assert.Same(t, c, c.PermissionMode("plan"))
@@ -47,7 +46,6 @@ func TestBuilderFieldValues(t *testing.T) {
 		Dir("/work").
 		Model("opus").
 		FallbackModel("sonnet").
-		OutputFormat(FormatJSON).
 		SystemPrompt("system").
 		AppendSystemPrompt("append").
 		PermissionMode("plan").
@@ -64,7 +62,6 @@ func TestBuilderFieldValues(t *testing.T) {
 	assert.Equal(t, "/work", c.dir)
 	assert.Equal(t, "opus", c.model)
 	assert.Equal(t, "sonnet", c.fallbackModel)
-	assert.Equal(t, FormatJSON, c.outputFormat)
 	assert.Equal(t, "system", c.systemPrompt)
 	assert.Equal(t, "append", c.appendPrompt)
 	assert.Equal(t, "plan", c.permissionMode)
@@ -133,10 +130,8 @@ func TestBuildEnv_AppendsCustomVars(t *testing.T) {
 	assert.Contains(t, env, "MY_VAR=hello")
 }
 
-func TestOutputFormatConstants(t *testing.T) {
-	assert.Equal(t, OutputFormat("text"), FormatText)
-	assert.Equal(t, OutputFormat("json"), FormatJSON)
-	assert.Equal(t, OutputFormat("stream-json"), FormatStreamJSON)
+func TestOutputFormatConstant(t *testing.T) {
+	assert.Equal(t, outputFormat("stream-json"), formatStreamJSON)
 }
 
 func TestStdOutStdErr_InitiallyEmpty(t *testing.T) {

@@ -67,13 +67,17 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	log.Printf("handler: received message from chat=%d thread=%d text=%q hasFile=%v", chatID, threadID, text, att != nil)
 
 	unlock := h.ChatLocker.Lock(chatID, threadID)
-	result := h.callClaude(dir, prompt, chatID, threadID)
+	result, claudeErr := h.callClaude(dir, prompt, chatID, threadID)
 	unlock()
 	stopTyping()
 
-	// Process sendfile blocks from ALL assistant messages (FullText),
-	// then strip them from display text (Text).
-	sendfile.ProcessReply(ctx, h.SendDoc, result.FullText, chatID, threadID, dir)
+	// Only execute command blocks when Claude succeeded; on error, partial
+	// output may contain incomplete or unintended command blocks.
+	if claudeErr == nil {
+		sendfile.ProcessReply(ctx, h.SendDoc, result.FullText, chatID, threadID, dir)
+	}
+
+	// Always strip command block syntax from display text.
 	displayText := sendfile.StripBlocks(result.Text)
 
 	if displayText != "" {
@@ -140,7 +144,7 @@ func buildPrompt(ctx context.Context, b *bot.Bot, text string, att *attachment, 
 	return prompt
 }
 
-func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) *claude.Result {
+func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) (*claude.Result, error) {
 	taskPrompt := h.Scheduler.FormatTaskList(chatID, threadID)
 	systemPrompt := telegram.Prompt + "\n\n" + taskPrompt
 
@@ -156,9 +160,11 @@ func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) *cl
 		if result.Text == "" {
 			result = &claude.Result{Text: "error: " + err.Error(), FullText: "error: " + err.Error()}
 		}
+		return result, err
 	}
 
 	// Execute command blocks from ALL assistant messages (FullText).
+	// Only runs on successful CLI execution to avoid side effects from partial output.
 	schedMsg := h.Scheduler.ExecuteBlocks(result.FullText, chatID, threadID)
 	var webhookMsg string
 	if h.WebhookManager != nil {
@@ -176,7 +182,7 @@ func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) *cl
 	// Append status messages from block execution.
 	result.Text = appendStatus(result.Text, schedMsg, webhookMsg)
 
-	return result
+	return result, nil
 }
 
 func appendStatus(text, schedMsg, webhookMsg string) string {

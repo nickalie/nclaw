@@ -10,22 +10,18 @@ import (
 	"github.com/nickalie/go-binwrapper"
 )
 
-// OutputFormat represents the output format for print mode.
-type OutputFormat string
+// outputFormat represents the output format for the CLI.
+type outputFormat string
 
-// Supported output formats for print mode.
-const (
-	FormatText       OutputFormat = "text"
-	FormatJSON       OutputFormat = "json"
-	FormatStreamJSON OutputFormat = "stream-json"
-)
+// formatStreamJSON is the output format used by query methods to capture multi-turn output.
+const formatStreamJSON outputFormat = "stream-json"
 
 // Claude wraps the Claude Code CLI binary.
 type Claude struct {
 	bin             *binwrapper.BinWrapper
 	model           string
 	fallbackModel   string
-	outputFormat    OutputFormat
+	outputFormat    outputFormat
 	systemPrompt    string
 	appendPrompt    string
 	permissionMode  string
@@ -75,12 +71,6 @@ func (c *Claude) Model(model string) *Claude {
 // FallbackModel sets an automatic fallback model when the default is overloaded.
 func (c *Claude) FallbackModel(model string) *Claude {
 	c.fallbackModel = model
-	return c
-}
-
-// OutputFormat sets the output format for print mode.
-func (c *Claude) OutputFormat(format OutputFormat) *Claude {
-	c.outputFormat = format
 	return c
 }
 
@@ -190,7 +180,7 @@ func (c *Claude) Env(vars []string) *Claude {
 // Ask sends a query in print mode and returns the response.
 // Uses stream-json output to capture all assistant messages across multi-turn execution.
 func (c *Claude) Ask(query string) (*Result, error) {
-	c.outputFormat = FormatStreamJSON
+	c.outputFormat = formatStreamJSON
 	c.prepare("-p")
 	return c.runAndParse(query)
 }
@@ -198,7 +188,7 @@ func (c *Claude) Ask(query string) (*Result, error) {
 // Continue sends a query continuing the most recent conversation in the current directory.
 // Uses stream-json output to capture all assistant messages across multi-turn execution.
 func (c *Claude) Continue(query string) (*Result, error) {
-	c.outputFormat = FormatStreamJSON
+	c.outputFormat = formatStreamJSON
 	c.prepare("-c", "-p")
 	return c.runAndParse(query)
 }
@@ -206,7 +196,7 @@ func (c *Claude) Continue(query string) (*Result, error) {
 // Resume sends a query resuming a specific session by ID or name.
 // Uses stream-json output to capture all assistant messages across multi-turn execution.
 func (c *Claude) Resume(session, query string) (*Result, error) {
-	c.outputFormat = FormatStreamJSON
+	c.outputFormat = formatStreamJSON
 	c.prepare("-r", session, "-p")
 	return c.runAndParse(query)
 }
