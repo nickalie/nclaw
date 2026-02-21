@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"log"
 	"strings"
 )
 
@@ -84,6 +85,10 @@ func collectStreamEvents(output []byte) (allText []string, resultText string) {
 		case "result":
 			resultText = event.Result
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Printf("claude: stream scan error (output may be truncated): %v", err)
 	}
 
 	return allText, resultText
