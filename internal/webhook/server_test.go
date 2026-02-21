@@ -45,6 +45,7 @@ func TestServer_WebhookRoute_NotFound(t *testing.T) {
 
 func TestServer_WebhookRoute_ActiveWebhook(t *testing.T) {
 	srv, mgr := setupTestServer(t)
+	defer mgr.Wait()
 
 	wh, err := mgr.Create("test hook", 100, 0)
 	require.NoError(t, err)
@@ -78,6 +79,7 @@ func TestServer_WebhookRoute_InactiveWebhook(t *testing.T) {
 
 func TestServer_WebhookRoute_GET(t *testing.T) {
 	srv, mgr := setupTestServer(t)
+	defer mgr.Wait()
 
 	wh, err := mgr.Create("get hook", 100, 0)
 	require.NoError(t, err)
@@ -92,6 +94,7 @@ func TestServer_WebhookRoute_GET(t *testing.T) {
 
 func TestServer_WebhookRoute_PUT(t *testing.T) {
 	srv, mgr := setupTestServer(t)
+	defer mgr.Wait()
 
 	wh, err := mgr.Create("put hook", 100, 0)
 	require.NoError(t, err)
@@ -124,6 +127,7 @@ func TestServer_UnknownRoute(t *testing.T) {
 
 func TestExtractHeaders(t *testing.T) {
 	srv, mgr := setupTestServer(t)
+	defer mgr.Wait()
 
 	wh, err := mgr.Create("header test", 100, 0)
 	require.NoError(t, err)

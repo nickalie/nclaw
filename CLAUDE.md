@@ -14,8 +14,9 @@ Telegram -> Handler -> Claude Code CLI (via go-binwrapper) -> Telegram
 
 - `cmd/nclaw/main.go` - Entrypoint: config init, DB setup, bot creation, scheduler start
 - `internal/config/` - Viper-based config (env prefix `NCLAW_`, `.env` support, optional `config.yaml`)
-- `internal/handler/` - Telegram message handling, file attachments, reply context, sendfile processing
+- `internal/handler/` - Telegram message handling, file attachments, reply context
 - `internal/claude/` - Claude Code CLI wrapper using `go-binwrapper` (fluent builder API), plus OAuth token refresh
+- `internal/sendfile/` - Shared sendfile processing: parses `nclaw:sendfile` blocks, validates paths, sends documents
 - `internal/model/` - GORM models: `ScheduledTask`, `TaskRunLog`, `WebhookRegistration`
 - `internal/db/` - Database operations (SQLite with WAL mode)
 - `internal/scheduler/` - Task scheduling via `gocron`, command parsing from Claude replies
@@ -38,7 +39,7 @@ Claude's replies are scanned for `nclaw:webhook` code blocks containing JSON com
 
 ### File Handling
 - **Inbound**: Attachments (documents, photos, audio, video, stickers) are downloaded to the chat directory and referenced in prompts. Files are cached by unique ID and size.
-- **Outbound**: Claude's replies are scanned for `nclaw:sendfile` code blocks. Matched files are sent as Telegram documents.
+- **Outbound**: Claude's replies are scanned for `nclaw:sendfile` code blocks via the shared `sendfile` package (used by handler, scheduler, and webhook). Matched files are sent as Telegram documents. File paths must resolve to within the chat directory or the OS temp directory; paths outside these locations are rejected.
 
 ### Message Formatting
 Replies use Telegram HTML formatting with plain-text fallback. Long messages are split at newline boundaries (max 4096 chars per message).
