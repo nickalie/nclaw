@@ -32,6 +32,7 @@ var (
 type Pipeline struct {
 	executors          []BlockExecutor
 	sendDoc            sendfile.SendDocFunc
+	sendMediaGroup     sendfile.SendMediaGroupFunc
 	send               SendFunc
 	webhooksConfigured bool
 }
@@ -39,7 +40,10 @@ type Pipeline struct {
 // New creates a Pipeline. Nil executors are silently filtered out.
 // webhooksConfigured indicates whether a webhook executor is present, used to
 // warn users when webhook blocks appear but webhooks are not enabled.
-func New(send SendFunc, sendDoc sendfile.SendDocFunc, webhooksConfigured bool, executors ...BlockExecutor) *Pipeline {
+func New(
+	send SendFunc, sendDoc sendfile.SendDocFunc, sendMediaGroup sendfile.SendMediaGroupFunc,
+	webhooksConfigured bool, executors ...BlockExecutor,
+) *Pipeline {
 	var filtered []BlockExecutor
 	for _, e := range executors {
 		if e != nil {
@@ -49,6 +53,7 @@ func New(send SendFunc, sendDoc sendfile.SendDocFunc, webhooksConfigured bool, e
 	return &Pipeline{
 		executors:          filtered,
 		sendDoc:            sendDoc,
+		sendMediaGroup:     sendMediaGroup,
 		send:               send,
 		webhooksConfigured: webhooksConfigured,
 	}
@@ -72,7 +77,7 @@ func (p *Pipeline) Process(
 				statusMsgs = append(statusMsgs, msg)
 			}
 		}
-		sendfile.ExecuteBlocks(ctx, p.sendDoc, result.FullText, chatID, threadID, dir)
+		sendfile.ExecuteBlocks(ctx, p.sendDoc, p.sendMediaGroup, result.FullText, chatID, threadID, dir)
 	}
 
 	// Phase 2: Strip all command block syntax from display text.
