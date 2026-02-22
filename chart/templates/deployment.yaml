@@ -52,6 +52,9 @@ spec:
                 mkdir -p /dest/.claude/skills
                 cp -r /root/.claude/skills/* /dest/.claude/skills/ 2>/dev/null || true
               fi
+              if [ -f /root/.claude/settings.json ]; then
+                cp /root/.claude/settings.json /dest/.claude/settings.json
+              fi
           volumeMounts:
             - name: data
               mountPath: /dest

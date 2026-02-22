@@ -67,6 +67,9 @@ COPY .claude/skills/schedule /root/.claude/skills/schedule
 COPY .claude/skills/send-file /root/.claude/skills/send-file
 COPY .claude/skills/webhook /root/.claude/skills/webhook
 
+# Enable autocompact for Claude Code
+RUN echo '{"autoCompact": true}' > /root/.claude/settings.json
+
 WORKDIR /app
 
 ENTRYPOINT ["nclaw"]
