@@ -25,19 +25,13 @@ func StripBlocks(text string) string {
 	return strings.TrimSpace(blockRe.ReplaceAllString(text, ""))
 }
 
-// ProcessReply extracts nclaw:sendfile blocks, sends files via sendDoc, and returns cleaned text.
-func ProcessReply(ctx context.Context, sendDoc SendDocFunc, reply string, chatID int64, threadID int, dir string) string {
-	matches := blockRe.FindAllStringSubmatch(reply, -1)
-	if len(matches) == 0 {
-		return reply
-	}
-
+// ExecuteBlocks extracts nclaw:sendfile blocks from text and sends the files via sendDoc.
+// Does not modify the input text.
+func ExecuteBlocks(ctx context.Context, sendDoc SendDocFunc, text string, chatID int64, threadID int, dir string) {
+	matches := blockRe.FindAllStringSubmatch(text, -1)
 	for _, match := range matches {
 		send(ctx, sendDoc, match[1], chatID, threadID, dir)
 	}
-
-	cleaned := blockRe.ReplaceAllString(reply, "")
-	return strings.TrimSpace(cleaned)
 }
 
 func send(ctx context.Context, sendDoc SendDocFunc, jsonStr string, chatID int64, threadID int, dir string) {

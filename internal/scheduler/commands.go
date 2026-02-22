@@ -28,31 +28,27 @@ type scheduleCommand struct {
 	TaskID  string `json:"task_id"`
 }
 
-// ProcessReply extracts nclaw:schedule code blocks from a reply, executes them, and returns cleaned text.
-func (s *Scheduler) ProcessReply(reply string, chatID int64, threadID int) string {
-	matches := scheduleBlockRe.FindAllStringSubmatchIndex(reply, -1)
+// ExecuteBlocks extracts nclaw:schedule code blocks from text, executes them,
+// and returns any status messages (errors). Does not modify the input text.
+func (s *Scheduler) ExecuteBlocks(text string, chatID int64, threadID int) string {
+	matches := scheduleBlockRe.FindAllStringSubmatch(text, -1)
 	if len(matches) == 0 {
-		return reply
+		return ""
 	}
 
-	var errors []string
+	var errs []string
 
 	for _, match := range matches {
-		jsonStr := reply[match[2]:match[3]]
-		if err := s.executeCommand(jsonStr, chatID, threadID); err != nil {
+		if err := s.executeCommand(match[1], chatID, threadID); err != nil {
 			log.Printf("scheduler: command error: %v", err)
-			errors = append(errors, err.Error())
+			errs = append(errs, err.Error())
 		}
 	}
 
-	cleaned := scheduleBlockRe.ReplaceAllString(reply, "")
-	cleaned = strings.TrimSpace(cleaned)
-
-	if len(errors) > 0 {
-		cleaned += "\n\n[Schedule error: " + strings.Join(errors, "; ") + "]"
+	if len(errs) > 0 {
+		return "[Schedule error: " + strings.Join(errs, "; ") + "]"
 	}
-
-	return cleaned
+	return ""
 }
 
 func (s *Scheduler) executeCommand(jsonStr string, chatID int64, threadID int) error {

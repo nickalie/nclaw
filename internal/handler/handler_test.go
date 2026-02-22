@@ -236,48 +236,63 @@ func setupTestWebhookManager(t *testing.T) *webhook.Manager {
 }
 
 func TestHandlerWebhookManager_NilStripsBlocks(t *testing.T) {
-	h := &Handler{}
-	// Simulating what callClaude does after getting a reply from Claude.
-	// With nil WebhookManager, webhook blocks are stripped (not executed).
-	reply := "text\n```nclaw:webhook\n{\"action\":\"list\"}\n```\nmore"
-	if h.WebhookManager != nil {
-		reply = h.WebhookManager.ProcessReply(reply, 100, 0)
-	} else {
-		reply = webhook.StripBlocks(reply)
-	}
-	assert.NotContains(t, reply, "nclaw:webhook")
-	assert.Contains(t, reply, "text")
-	assert.Contains(t, reply, "more")
+	// With nil WebhookManager, webhook blocks are stripped with a warning (not executed).
+	text := "text\n```nclaw:webhook\n{\"action\":\"list\"}\n```\nmore"
+	text = webhook.StripBlocks(text)
+
+	assert.NotContains(t, text, "nclaw:webhook")
+	assert.Contains(t, text, "text")
+	assert.Contains(t, text, "more")
+	assert.Contains(t, text, "Webhooks are not configured")
 }
 
-func TestHandlerWebhookManager_ProcessesBlocks(t *testing.T) {
+func TestHandlerWebhookManager_ExecutesBlocks(t *testing.T) {
 	mgr := setupTestWebhookManager(t)
-	h := &Handler{WebhookManager: mgr}
 
-	reply := "Here you go.\n```nclaw:webhook\n" +
+	// Simulate the new callClaude flow: ExecuteBlocks on FullText, StripBlocksClean on Text.
+	fullText := "Here you go.\n```nclaw:webhook\n" +
 		`{"action":"create","description":"test hook"}` +
 		"\n```\nDone!"
 
-	// Simulate the webhook processing step from callClaude.
-	if h.WebhookManager != nil {
-		reply = h.WebhookManager.ProcessReply(reply, 100, 0)
-	}
+	webhookMsg := mgr.ExecuteBlocks(fullText, 100, 0)
+	displayText := webhook.StripBlocksClean(fullText)
+	displayText = appendStatus(displayText, "", webhookMsg)
 
-	assert.NotContains(t, reply, "nclaw:webhook")
-	assert.Contains(t, reply, "Here you go.")
-	assert.Contains(t, reply, "Done!")
-	assert.Contains(t, reply, "[Webhook created: https://example.com/webhooks/")
+	assert.NotContains(t, displayText, "nclaw:webhook")
+	assert.Contains(t, displayText, "Here you go.")
+	assert.Contains(t, displayText, "Done!")
+	assert.Contains(t, displayText, "[Webhook created: https://example.com/webhooks/")
 }
 
 func TestHandlerWebhookManager_ListEmpty(t *testing.T) {
 	mgr := setupTestWebhookManager(t)
-	h := &Handler{WebhookManager: mgr}
 
-	reply := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
-	if h.WebhookManager != nil {
-		reply = h.WebhookManager.ProcessReply(reply, 100, 0)
-	}
+	// Simulate the new callClaude flow.
+	fullText := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
 
-	assert.Contains(t, reply, "[No webhooks registered]")
-	assert.NotContains(t, reply, "nclaw:webhook")
+	webhookMsg := mgr.ExecuteBlocks(fullText, 100, 0)
+	displayText := webhook.StripBlocksClean(fullText)
+	displayText = appendStatus(displayText, "", webhookMsg)
+
+	assert.Contains(t, displayText, "[No webhooks registered]")
+	assert.NotContains(t, displayText, "nclaw:webhook")
+}
+
+func TestAppendStatus_NoMessages(t *testing.T) {
+	assert.Equal(t, "hello", appendStatus("hello", "", ""))
+}
+
+func TestAppendStatus_ScheduleMessage(t *testing.T) {
+	result := appendStatus("text", "[Schedule error: oops]", "")
+	assert.Equal(t, "text\n\n[Schedule error: oops]", result)
+}
+
+func TestAppendStatus_BothMessages(t *testing.T) {
+	result := appendStatus("text", "sched msg", "webhook msg")
+	assert.Equal(t, "text\n\nsched msg\n\nwebhook msg", result)
+}
+
+func TestAppendStatus_EmptyBase(t *testing.T) {
+	result := appendStatus("", "msg", "")
+	assert.Equal(t, "msg", result)
 }

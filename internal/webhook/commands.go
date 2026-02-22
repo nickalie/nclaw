@@ -12,6 +12,11 @@ import (
 
 var webhookBlockRe = regexp.MustCompile("(?s)```nclaw:webhook\n(.*?)\n```")
 
+// StripBlocksClean removes nclaw:webhook code blocks from text without appending any warning.
+func StripBlocksClean(text string) string {
+	return strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
+}
+
 // StripBlocks removes nclaw:webhook code blocks from text and appends a warning if any were found.
 // Used when the webhook manager is not configured.
 func StripBlocks(text string) string {
@@ -28,19 +33,18 @@ type webhookCommand struct {
 	WebhookID   string `json:"webhook_id"`
 }
 
-// ProcessReply extracts nclaw:webhook code blocks from a reply, executes them, and returns cleaned text.
-func (m *Manager) ProcessReply(reply string, chatID int64, threadID int) string {
-	matches := webhookBlockRe.FindAllStringSubmatchIndex(reply, -1)
+// ExecuteBlocks extracts nclaw:webhook code blocks from text, executes them,
+// and returns any status/error messages. Does not modify the input text.
+func (m *Manager) ExecuteBlocks(text string, chatID int64, threadID int) string {
+	matches := webhookBlockRe.FindAllStringSubmatch(text, -1)
 	if len(matches) == 0 {
-		return reply
+		return ""
 	}
 
-	var results []string
-	var errs []string
+	var results, errs []string
 
 	for _, match := range matches {
-		jsonStr := reply[match[2]:match[3]]
-		result, err := m.executeCommand(jsonStr, chatID, threadID)
+		result, err := m.executeCommand(match[1], chatID, threadID)
 		if err != nil {
 			log.Printf("webhook: command error: %v", err)
 			errs = append(errs, err.Error())
@@ -49,17 +53,14 @@ func (m *Manager) ProcessReply(reply string, chatID int64, threadID int) string 
 		}
 	}
 
-	cleaned := webhookBlockRe.ReplaceAllString(reply, "")
-	cleaned = strings.TrimSpace(cleaned)
-
+	var msgs []string
 	if len(results) > 0 {
-		cleaned = appendSection(cleaned, strings.Join(results, "\n"))
+		msgs = append(msgs, strings.Join(results, "\n"))
 	}
 	if len(errs) > 0 {
-		cleaned = appendSection(cleaned, "[Webhook error: "+strings.Join(errs, "; ")+"]")
+		msgs = append(msgs, "[Webhook error: "+strings.Join(errs, "; ")+"]")
 	}
-
-	return cleaned
+	return strings.Join(msgs, "\n\n")
 }
 
 func (m *Manager) executeCommand(jsonStr string, chatID int64, threadID int) (string, error) {
