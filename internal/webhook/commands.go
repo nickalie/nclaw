@@ -12,21 +12,6 @@ import (
 
 var webhookBlockRe = regexp.MustCompile("(?s)```nclaw:webhook\n(.*?)\n```")
 
-// StripBlocksClean removes nclaw:webhook code blocks from text without appending any warning.
-func StripBlocksClean(text string) string {
-	return strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
-}
-
-// StripBlocks removes nclaw:webhook code blocks from text and appends a warning if any were found.
-// Used when the webhook manager is not configured.
-func StripBlocks(text string) string {
-	if !webhookBlockRe.MatchString(text) {
-		return text
-	}
-	cleaned := strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
-	return appendSection(cleaned, "[Webhooks are not configured on this instance]")
-}
-
 type webhookCommand struct {
 	Action      string `json:"action"`
 	Description string `json:"description"`
@@ -109,13 +94,6 @@ func (m *Manager) deleteFromCommand(webhookID string, chatID int64, threadID int
 		return "", err
 	}
 	return fmt.Sprintf("[Webhook deleted: %s]", webhookID), nil
-}
-
-func appendSection(base, section string) string {
-	if base == "" {
-		return section
-	}
-	return base + "\n\n" + section
 }
 
 func (m *Manager) listFromCommand(chatID int64, threadID int) (string, error) {
