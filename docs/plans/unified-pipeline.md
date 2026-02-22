@@ -9,10 +9,10 @@ Three input channels (handler, scheduler, webhook) independently implement post-
 - `go build ./cmd/nclaw`
 
 ### Task 1: Create `internal/pipeline/` package
-- [ ] Create `internal/pipeline/pipeline.go` with `BlockExecutor` interface, `SendFunc` type, `Pipeline` struct, `New()` constructor
-- [ ] Implement `Process()`: execute blocks on `FullText` (gated on `claudeErr==nil`), strip from `Text`, append status, sendfile, send reply with HTML fallback
-- [ ] Own copies of schedule/webhook block regexes for stripping (avoids import cycle)
-- [ ] Create `internal/pipeline/pipeline_test.go` with mock `BlockExecutor`: success path, error path skips execution, nil webhook, status appending, empty text
+- [x] Create `internal/pipeline/pipeline.go` with `BlockExecutor` interface, `SendFunc` type, `Pipeline` struct, `New()` constructor
+- [x] Implement `Process()`: execute blocks on `FullText` (gated on `claudeErr==nil`), strip from `Text`, append status, sendfile, send reply with HTML fallback
+- [x] Own copies of schedule/webhook block regexes for stripping (avoids import cycle)
+- [x] Create `internal/pipeline/pipeline_test.go` with mock `BlockExecutor`: success path, error path skips execution, nil webhook, status appending, empty text
 
 ### Task 2: Refactor handler to use pipeline
 - [ ] Replace `WebhookManager` and `SendDoc` fields with `Pipeline *pipeline.Pipeline`
