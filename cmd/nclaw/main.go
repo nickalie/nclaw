@@ -69,11 +69,13 @@ func main() {
 		webhookMgr.SetPipeline(p)
 	}
 
-	// Start webhook HTTP server after pipeline is wired to avoid data race.
-	webhookSrv := startWebhookServer(webhookMgr)
-
+	// Load tasks and start scheduler before webhook server to avoid a race where
+	// an incoming webhook creates a task that LoadTasks then re-registers as a duplicate job.
 	sched.LoadTasks()
 	sched.Start()
+
+	// Start webhook HTTP server after pipeline is wired and scheduler is loaded.
+	webhookSrv := startWebhookServer(webhookMgr)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
