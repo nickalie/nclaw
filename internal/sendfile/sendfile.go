@@ -69,7 +69,7 @@ func ExecuteBlocks(
 	sendFilesAsGroups(ctx, sendMediaGroup, files, chatID, threadID)
 }
 
-func resolveFile(jsonStr string, dir string) (File, bool) {
+func resolveFile(jsonStr, dir string) (File, bool) {
 	var cmd command
 	if err := json.Unmarshal([]byte(jsonStr), &cmd); err != nil {
 		log.Printf("sendfile: invalid JSON: %v", err)
