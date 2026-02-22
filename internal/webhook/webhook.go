@@ -15,13 +15,9 @@ import (
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
-	"github.com/nickalie/nclaw/internal/scheduler"
-	"github.com/nickalie/nclaw/internal/sendfile"
+	"github.com/nickalie/nclaw/internal/pipeline"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
-
-// SendFunc sends a text message to a Telegram chat/thread with an optional parse mode.
-type SendFunc func(ctx context.Context, chatID int64, threadID int, text, parseMode string) error
 
 // IncomingRequest holds the data from an incoming webhook HTTP request.
 type IncomingRequest struct {
@@ -56,7 +52,7 @@ var sensitiveSubstrings = []string{"token", "secret", "signature", "api-key", "a
 // Manager handles webhook registration and incoming webhook processing.
 type Manager struct {
 	db         *gorm.DB
-	send       SendFunc
+	pipeline   *pipeline.Pipeline
 	baseDomain string
 	dataDir    string
 	sem        chan struct{}
@@ -66,17 +62,21 @@ type Manager struct {
 
 // NewManager creates a new webhook Manager.
 func NewManager(
-	database *gorm.DB, send SendFunc,
+	database *gorm.DB,
 	baseDomain, dataDir string, chatLocker *telegram.ChatLocker,
 ) *Manager {
 	return &Manager{
 		db:         database,
-		send:       send,
 		baseDomain: baseDomain,
 		dataDir:    dataDir,
 		sem:        make(chan struct{}, maxConcurrentWebhooks),
 		chatLocker: chatLocker,
 	}
+}
+
+// SetPipeline sets the pipeline for post-Claude response processing.
+func (m *Manager) SetPipeline(p *pipeline.Pipeline) {
+	m.pipeline = p
 }
 
 // Create registers a new webhook and returns it.
@@ -151,33 +151,25 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 }
 
 func (m *Manager) processIncoming(wh *model.WebhookRegistration, req IncomingRequest) {
-	result := m.callClaude(wh, req)
-
-	// Strip all command blocks from display text.
-	text := StripBlocksClean(result.Text)
-	text = scheduler.StripBlocks(text)
-	text = sendfile.StripBlocks(text)
-
-	if text == "" {
-		return
-	}
+	result, claudeErr := m.callClaude(wh, req)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	m.sendReply(ctx, wh.ChatID, wh.ThreadID, text)
+	dir := telegram.ChatDir(m.dataDir, wh.ChatID, wh.ThreadID)
+	m.pipeline.Process(ctx, result, claudeErr, wh.ChatID, wh.ThreadID, dir)
 }
 
-func (m *Manager) callClaude(webhook *model.WebhookRegistration, req IncomingRequest) *claude.Result {
-	unlock := m.chatLocker.Lock(webhook.ChatID, webhook.ThreadID)
+func (m *Manager) callClaude(wh *model.WebhookRegistration, req IncomingRequest) (*claude.Result, error) {
+	unlock := m.chatLocker.Lock(wh.ChatID, wh.ThreadID)
 	defer unlock()
 
-	prompt := buildIncomingPrompt(webhook, req)
+	prompt := buildIncomingPrompt(wh, req)
 
-	dir := telegram.ChatDir(m.dataDir, webhook.ChatID, webhook.ThreadID)
+	dir := telegram.ChatDir(m.dataDir, wh.ChatID, wh.ThreadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("webhook: mkdir %s: %v", dir, err)
-		return &claude.Result{}
+		return &claude.Result{}, fmt.Errorf("webhook: mkdir: %w", err)
 	}
 
 	if err := claude.EnsureValidToken(); err != nil {
@@ -186,32 +178,14 @@ func (m *Manager) callClaude(webhook *model.WebhookRegistration, req IncomingReq
 
 	result, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(telegram.Prompt).Continue(prompt)
 	if err != nil {
-		log.Printf("webhook: claude error for %s: %v", webhook.ID, err)
+		log.Printf("webhook: claude error for %s: %v", wh.ID, err)
 		if result.Text == "" {
-			return &claude.Result{Text: "Webhook processing failed", FullText: "Webhook processing failed"}
+			result.Text = "Webhook processing failed"
+			result.FullText = "Webhook processing failed"
 		}
 	}
 
-	return result
-}
-
-func (m *Manager) sendReply(ctx context.Context, chatID int64, threadID int, text string) {
-	for _, chunk := range telegram.SplitMessage(text, telegram.MaxMessageLen) {
-		m.sendChunk(ctx, chatID, threadID, chunk)
-	}
-}
-
-func (m *Manager) sendChunk(ctx context.Context, chatID int64, threadID int, text string) {
-	var lastErr error
-	for _, mode := range []string{"HTML", ""} {
-		if err := m.send(ctx, chatID, threadID, text, mode); err == nil {
-			return
-		} else {
-			lastErr = err
-			log.Printf("webhook: send parseMode=%q error: %v", mode, err)
-		}
-	}
-	log.Printf("webhook: failed to send message to chat=%d thread=%d: %v", chatID, threadID, lastErr)
+	return result, err
 }
 
 func isSensitiveHeader(name string) bool {

@@ -11,8 +11,11 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/nickalie/nclaw/internal/model"
+	"github.com/nickalie/nclaw/internal/pipeline"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
+
+func noopSend(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
 
 func setupTestManager(t *testing.T) *Manager {
 	t.Helper()
@@ -22,8 +25,9 @@ func setupTestManager(t *testing.T) *Manager {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
-	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
-	return NewManager(database, send, "example.com", t.TempDir(), telegram.NewChatLocker())
+	mgr := NewManager(database, "example.com", t.TempDir(), telegram.NewChatLocker())
+	mgr.SetPipeline(pipeline.New(noopSend, nil))
+	return mgr
 }
 
 func TestWebhookBlockRegex(t *testing.T) {

@@ -55,7 +55,7 @@ func main() {
 
 	h.Scheduler = sched
 
-	webhookSrv, webhookMgr := startWebhooks(database, b, chatLocker)
+	webhookSrv, webhookMgr := startWebhooks(database, chatLocker)
 
 	// Build pipeline executors; avoid Go nil interface trap for webhookMgr.
 	executors := []pipeline.BlockExecutor{sched}
@@ -65,6 +65,9 @@ func main() {
 	p := pipeline.New(newPipelineSendFunc(b), sendDoc, executors...)
 	h.Pipeline = p
 	sched.SetPipeline(p)
+	if webhookMgr != nil {
+		webhookMgr.SetPipeline(p)
+	}
 
 	sched.LoadTasks()
 	sched.Start()
@@ -139,26 +142,14 @@ func newPipelineSendFunc(b *bot.Bot) pipeline.SendFunc {
 }
 
 func startWebhooks(
-	database *gorm.DB, b *bot.Bot, chatLocker *telegram.ChatLocker,
+	database *gorm.DB, chatLocker *telegram.ChatLocker,
 ) (*webhook.Server, *webhook.Manager) {
 	domain := config.WebhookBaseDomain()
 	if domain == "" {
 		return nil, nil
 	}
 
-	send := webhook.SendFunc(func(ctx context.Context, chatID int64, threadID int, text, parseMode string) error {
-		params := &bot.SendMessageParams{
-			ChatID:          chatID,
-			MessageThreadID: threadID,
-			Text:            text,
-		}
-		if parseMode != "" {
-			params.ParseMode = models.ParseMode(parseMode)
-		}
-		_, err := b.SendMessage(ctx, params)
-		return err
-	})
-	mgr := webhook.NewManager(database, send, domain, config.DataDir(), chatLocker)
+	mgr := webhook.NewManager(database, domain, config.DataDir(), chatLocker)
 	srv := webhook.NewServer(mgr)
 
 	listenErr := make(chan error, 1)

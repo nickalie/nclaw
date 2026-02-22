@@ -29,10 +29,10 @@ Three input channels (handler, scheduler, webhook) independently implement post-
 - [x] Update scheduler tests for new constructor signature
 
 ### Task 4: Refactor webhook to use pipeline
-- [ ] Add `pipeline` field + `SetPipeline()` method to `Manager`
-- [ ] Simplify `processIncoming()`: delegate to `m.pipeline.Process()`
-- [ ] Remove `sendReply()`, `sendChunk()`, `send` field from `Manager`
-- [ ] Update `callClaude()` to return `(*claude.Result, error)`
+- [x] Add `pipeline` field + `SetPipeline()` method to `Manager`
+- [x] Simplify `processIncoming()`: delegate to `m.pipeline.Process()`
+- [x] Remove `sendReply()`, `sendChunk()`, `send` field from `Manager`
+- [x] Update `callClaude()` to return `(*claude.Result, error)`
 
 ### Task 5: Update wiring in `cmd/nclaw/main.go`
 - [ ] Create single `SendFunc` (with `parseMode`) used by pipeline
