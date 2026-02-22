@@ -42,5 +42,5 @@ Three input channels (handler, scheduler, webhook) independently implement post-
 - [x] Handle Go nil interface trap for webhook `BlockExecutor`
 
 ### Task 6: Finalize
-- [ ] Update `CLAUDE.md` project structure and patterns
-- [ ] Run `go test ./...` and `golangci-lint run ./...`
+- [x] Update `CLAUDE.md` project structure and patterns
+- [x] Run `go test ./...` and `golangci-lint run ./...`

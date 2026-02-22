@@ -5,10 +5,12 @@ Telegram bot that wraps the Claude Code CLI. Users message a Telegram bot, which
 ## Architecture
 
 ```
-Telegram -> Handler -> Claude Code CLI (via go-binwrapper) -> Telegram
-                    -> Scheduler (gocron + SQLite) for recurring/one-time tasks
-                    -> Webhook Manager (GoFiber HTTP server) for incoming HTTP callbacks
+Telegram -> Handler  -\
+Scheduler ------------>  Claude Code CLI -> Pipeline.Process() -> Telegram
+Webhook  ----------->/
 ```
+
+Three input channels (handler, scheduler, webhook) each invoke the Claude CLI independently. All post-Claude processing (command block execution, stripping, sendfile, reply delivery) is handled by a shared `Pipeline.Process()` call, ensuring consistent behavior across all channels.
 
 ## Project Structure
 
@@ -16,6 +18,7 @@ Telegram -> Handler -> Claude Code CLI (via go-binwrapper) -> Telegram
 - `internal/config/` - Viper-based config (env prefix `NCLAW_`, `.env` support, optional `config.yaml`)
 - `internal/handler/` - Telegram message handling, file attachments, reply context
 - `internal/claude/` - Claude Code CLI wrapper using `go-binwrapper` (fluent builder API), plus OAuth token refresh
+- `internal/pipeline/` - Unified post-Claude processing: block execution, stripping, sendfile, reply delivery
 - `internal/sendfile/` - Shared sendfile processing: parses `nclaw:sendfile` blocks, validates paths, sends documents
 - `internal/model/` - GORM models: `ScheduledTask`, `TaskRunLog`, `WebhookRegistration`
 - `internal/db/` - Database operations (SQLite with WAL mode)
@@ -33,20 +36,24 @@ The `claude` package wraps the CLI binary with a fluent builder. The handler cal
 ### OAuth Token Refresh
 Before each CLI invocation (in handler and scheduler), `claude.EnsureValidToken()` proactively refreshes the OAuth token if it expires within 5 minutes. Credentials are read from `~/.claude/.credentials.json` using field-preserving JSON round-tripping. Refresh failures are logged as warnings and do not block the CLI call.
 
-### Command Block Processing
-Claude's replies can contain command blocks (`nclaw:sendfile`, `nclaw:schedule`, `nclaw:webhook`). Processing follows a two-phase pattern:
-1. **Execute** — `ExecuteBlocks()` scans `Result.FullText` (all assistant messages) and executes embedded commands. This ensures blocks in intermediate messages during multi-turn execution are not missed.
-2. **Strip** — `StripBlocks()` removes block syntax from `Result.Text` (the final message) before displaying to the user.
+### Unified Pipeline (`internal/pipeline/`)
+All post-Claude processing goes through `Pipeline.Process()`, which:
+1. **Execute** — Runs each `BlockExecutor.ExecuteBlocks()` on `Result.FullText` (all assistant messages), plus `sendfile.ExecuteBlocks()`. Skipped when Claude returned an error.
+2. **Strip** — Removes all command block syntax (`nclaw:sendfile`, `nclaw:schedule`, `nclaw:webhook`) from `Result.Text`.
+3. **Append status** — Adds status/error messages from block execution.
+4. **Send reply** — Delivers the final text via Telegram with HTML-then-plain-text fallback, splitting long messages.
+
+The scheduler and webhook manager implement the `BlockExecutor` interface and are passed to the pipeline as executors. The handler, scheduler, and webhook packages each invoke Claude independently, then call `Pipeline.Process()` for all post-processing.
 
 ### Scheduled Tasks
-All assistant messages from a Claude execution are scanned for `nclaw:schedule` code blocks containing JSON commands (`create`, `pause`, `resume`, `cancel`). Tasks support cron, interval, and one-time schedules. Tasks persist in SQLite and reload on startup.
+`nclaw:schedule` code blocks contain JSON commands (`create`, `pause`, `resume`, `cancel`). Tasks support cron, interval, and one-time schedules. Tasks persist in SQLite and reload on startup. The scheduler implements `BlockExecutor` for the pipeline.
 
 ### Webhooks
-All assistant messages from a Claude execution are scanned for `nclaw:webhook` code blocks containing JSON commands (`create`, `delete`, `list`). Webhooks register HTTP endpoints at `https://{BASE_DOMAIN}/webhooks/{UUID}`. When an external service calls a webhook URL, the request (method, headers, query params, body) is forwarded to Claude in the originating chat via `Continue()`. The HTTP server returns 200 immediately; Claude processing happens asynchronously in a goroutine. Webhooks persist in SQLite alongside scheduled tasks.
+`nclaw:webhook` code blocks contain JSON commands (`create`, `delete`, `list`). Webhooks register HTTP endpoints at `https://{BASE_DOMAIN}/webhooks/{UUID}`. When an external service calls a webhook URL, the request (method, headers, query params, body) is forwarded to Claude in the originating chat via `Continue()`. The HTTP server returns 200 immediately; Claude processing happens asynchronously in a goroutine. Webhooks persist in SQLite alongside scheduled tasks. The webhook manager implements `BlockExecutor` for the pipeline.
 
 ### File Handling
 - **Inbound**: Attachments (documents, photos, audio, video, stickers) are downloaded to the chat directory and referenced in prompts. Files are cached by unique ID and size.
-- **Outbound**: All assistant messages from a Claude execution are scanned for `nclaw:sendfile` code blocks via the shared `sendfile` package (used by handler and scheduler). Matched files are sent as Telegram documents. File paths must resolve to within the chat directory or the OS temp directory; paths outside these locations are rejected.
+- **Outbound**: `sendfile.ExecuteBlocks()` scans for `nclaw:sendfile` code blocks and sends matched files as Telegram documents. File paths must resolve to within the chat directory or the OS temp directory; paths outside these locations are rejected.
 
 ### Message Formatting
 Replies use Telegram HTML formatting with plain-text fallback. Long messages are split at newline boundaries (max 4096 chars per message).
