@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/go-telegram/bot"
@@ -14,18 +13,16 @@ import (
 
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/config"
+	"github.com/nickalie/nclaw/internal/pipeline"
 	"github.com/nickalie/nclaw/internal/scheduler"
-	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
-	"github.com/nickalie/nclaw/internal/webhook"
 )
 
 // Handler processes incoming Telegram messages.
 type Handler struct {
-	Scheduler      *scheduler.Scheduler
-	WebhookManager *webhook.Manager
-	ChatLocker     *telegram.ChatLocker
-	SendDoc        sendfile.SendDocFunc
+	Scheduler  *scheduler.Scheduler
+	Pipeline   *pipeline.Pipeline
+	ChatLocker *telegram.ChatLocker
 }
 
 // Default handles incoming messages by forwarding them to Claude Code.
@@ -71,24 +68,7 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	unlock()
 	stopTyping()
 
-	// Only execute command blocks when Claude succeeded; on error, partial
-	// output may contain incomplete or unintended command blocks.
-	if claudeErr == nil {
-		sendfile.ExecuteBlocks(ctx, h.SendDoc, result.FullText, chatID, threadID, dir)
-	}
-
-	// Always strip command block syntax from display text.
-	displayText := sendfile.StripBlocks(result.Text)
-	displayText = scheduler.StripBlocks(displayText)
-	if h.WebhookManager != nil {
-		displayText = webhook.StripBlocksClean(displayText)
-	} else {
-		displayText = webhook.StripBlocks(displayText)
-	}
-
-	if displayText != "" {
-		sendReply(ctx, b, chatID, threadID, displayText)
-	}
+	h.Pipeline.Process(ctx, result, claudeErr, chatID, threadID, dir)
 }
 
 // resolveContent extracts text and attachment from a message, falling back to reply attachment.
@@ -166,39 +146,9 @@ func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) (*c
 		if result.Text == "" {
 			result = &claude.Result{Text: "error: " + err.Error(), FullText: "error: " + err.Error()}
 		}
-		return result, err
 	}
 
-	// Execute command blocks from ALL assistant messages (FullText).
-	// Only runs on successful CLI execution to avoid side effects from partial output.
-	schedMsg := h.Scheduler.ExecuteBlocks(result.FullText, chatID, threadID)
-	var webhookMsg string
-	if h.WebhookManager != nil {
-		webhookMsg = h.WebhookManager.ExecuteBlocks(result.FullText, chatID, threadID)
-	}
-
-	// Strip command blocks from display text (final message only).
-	result.Text = scheduler.StripBlocks(result.Text)
-	if h.WebhookManager != nil {
-		result.Text = webhook.StripBlocksClean(result.Text)
-	} else {
-		result.Text = webhook.StripBlocks(result.Text)
-	}
-
-	// Append status messages from block execution.
-	result.Text = appendStatus(result.Text, schedMsg, webhookMsg)
-
-	return result, nil
-}
-
-func appendStatus(text, schedMsg, webhookMsg string) string {
-	if schedMsg != "" {
-		text = strings.TrimSpace(text) + "\n\n" + schedMsg
-	}
-	if webhookMsg != "" {
-		text = strings.TrimSpace(text) + "\n\n" + webhookMsg
-	}
-	return strings.TrimSpace(text)
+	return result, err
 }
 
 func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {
@@ -226,29 +176,5 @@ func isChatAllowed(chatID int64) bool {
 func ensureDir(dir string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("failed to create dir %s: %v", dir, err)
-	}
-}
-
-func sendReply(ctx context.Context, b *bot.Bot, chatID int64, threadID int, text string) {
-	log.Printf("handler: sending reply len=%d", len(text))
-
-	for _, chunk := range telegram.SplitMessage(text, telegram.MaxMessageLen) {
-		sendChunk(ctx, b, chatID, threadID, chunk)
-	}
-}
-
-func sendChunk(ctx context.Context, b *bot.Bot, chatID int64, threadID int, text string) {
-	modes := []models.ParseMode{models.ParseModeHTML, ""}
-	for _, mode := range modes {
-		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:          chatID,
-			MessageThreadID: threadID,
-			Text:            text,
-			ParseMode:       mode,
-		})
-		if err == nil {
-			return
-		}
-		log.Printf("handler: SendMessage parseMode=%q error: %v", mode, err)
 	}
 }

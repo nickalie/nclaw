@@ -15,6 +15,7 @@ import (
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/handler"
+	"github.com/nickalie/nclaw/internal/pipeline"
 	"github.com/nickalie/nclaw/internal/scheduler"
 	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
@@ -47,18 +48,34 @@ func main() {
 	}
 
 	sendDoc := newSendDocFunc(b)
-	h.SendDoc = sendDoc
-	sched, err := scheduler.New(database, newSendFunc(b), sendDoc, config.Timezone(), config.DataDir(), chatLocker)
+	sched, err := scheduler.New(database, config.Timezone(), config.DataDir(), chatLocker)
 	if err != nil {
 		log.Fatal("scheduler: ", err)
 	}
-	sched.LoadTasks()
-	sched.Start()
 
 	h.Scheduler = sched
 
-	webhookSrv, webhookMgr := startWebhooks(database, b, chatLocker)
-	h.WebhookManager = webhookMgr
+	webhookMgr := createWebhookManager(database, chatLocker)
+
+	// Build pipeline executors; avoid Go nil interface trap for webhookMgr.
+	executors := []pipeline.BlockExecutor{sched}
+	if webhookMgr != nil {
+		executors = append(executors, webhookMgr)
+	}
+	p := pipeline.New(newPipelineSendFunc(b), sendDoc, webhookMgr != nil, executors...)
+	h.Pipeline = p
+	sched.SetPipeline(p)
+	if webhookMgr != nil {
+		webhookMgr.SetPipeline(p)
+	}
+
+	// Load tasks and start scheduler before webhook server to avoid a race where
+	// an incoming webhook creates a task that LoadTasks then re-registers as a duplicate job.
+	sched.LoadTasks()
+	sched.Start()
+
+	// Start webhook HTTP server after pipeline is wired and scheduler is loaded.
+	webhookSrv := startWebhookServer(webhookMgr)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
@@ -103,18 +120,7 @@ func newSendDocFunc(b *bot.Bot) sendfile.SendDocFunc {
 	}
 }
 
-func newSendFunc(b *bot.Bot) scheduler.SendFunc {
-	return func(ctx context.Context, chatID int64, threadID int, text string) error {
-		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:          chatID,
-			MessageThreadID: threadID,
-			Text:            text,
-		})
-		return err
-	}
-}
-
-func newWebhookSendFunc(b *bot.Bot) webhook.SendFunc {
+func newPipelineSendFunc(b *bot.Bot) pipeline.SendFunc {
 	return func(ctx context.Context, chatID int64, threadID int, text, parseMode string) error {
 		params := &bot.SendMessageParams{
 			ChatID:          chatID,
@@ -129,15 +135,19 @@ func newWebhookSendFunc(b *bot.Bot) webhook.SendFunc {
 	}
 }
 
-func startWebhooks(
-	database *gorm.DB, b *bot.Bot, chatLocker *telegram.ChatLocker,
-) (*webhook.Server, *webhook.Manager) {
+func createWebhookManager(database *gorm.DB, chatLocker *telegram.ChatLocker) *webhook.Manager {
 	domain := config.WebhookBaseDomain()
 	if domain == "" {
-		return nil, nil
+		return nil
+	}
+	return webhook.NewManager(database, domain, config.DataDir(), chatLocker)
+}
+
+func startWebhookServer(mgr *webhook.Manager) *webhook.Server {
+	if mgr == nil {
+		return nil
 	}
 
-	mgr := webhook.NewManager(database, newWebhookSendFunc(b), domain, config.DataDir(), chatLocker)
 	srv := webhook.NewServer(mgr)
 
 	listenErr := make(chan error, 1)
@@ -161,7 +171,7 @@ func startWebhooks(
 		}
 	}()
 
-	return srv, mgr
+	return srv
 }
 
 func shutdownWebhook(srv *webhook.Server, mgr *webhook.Manager) {
