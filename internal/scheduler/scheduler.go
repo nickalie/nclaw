@@ -392,6 +392,11 @@ func (s *Scheduler) resolveNextRun(task *model.ScheduledTask) *time.Time {
 }
 
 func (s *Scheduler) sendResult(task *model.ScheduledTask, result *claude.Result, runErr error) {
+	if s.pipeline == nil {
+		log.Printf("scheduler: pipeline not ready, dropping result for task %s", task.ID)
+		return
+	}
+
 	if runErr != nil {
 		result = &claude.Result{
 			Text:     "Scheduled task error: " + runErr.Error(),
