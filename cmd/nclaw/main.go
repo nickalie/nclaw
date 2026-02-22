@@ -62,7 +62,7 @@ func main() {
 	if webhookMgr != nil {
 		executors = append(executors, webhookMgr)
 	}
-	p := pipeline.New(newPipelineSendFunc(b), sendDoc, executors...)
+	p := pipeline.New(newPipelineSendFunc(b), sendDoc, webhookMgr != nil, executors...)
 	h.Pipeline = p
 	sched.SetPipeline(p)
 	if webhookMgr != nil {

@@ -1,5 +1,7 @@
 # Plan: Unified Message Processing Pipeline
 
+**Status: Complete**
+
 Currently, there are 3 different mechanisms for processing incoming messages and responses from Claude: telegram, schedule, and webhook. Essentially, these are just different message delivery paths, but right now their logic differs, especially when it comes to handling custom hooks such as send-file, webhook, and schedule. For example, if a message comes in via a webhook, Claude should still be able to create a schedule or another webhook. The same applies to schedule — it should be possible to create other schedules, webhooks, etc. So we need to refactor the code so that all 3 channels process messages in the same way, through a single codebase, without duplicating logic. In the future, there may be more incoming message channels. The outgoing channel is currently just one (Telegram), but there may be more in the future.
 Three input channels (handler, scheduler, webhook) independently implement post-Claude processing with duplicated and inconsistent logic. Extract a shared `internal/pipeline/` package so all channels process Claude responses identically through a single `Process()` call.
 

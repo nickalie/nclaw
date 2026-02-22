@@ -151,6 +151,11 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 }
 
 func (m *Manager) processIncoming(wh *model.WebhookRegistration, req IncomingRequest) {
+	if m.pipeline == nil {
+		log.Printf("webhook: pipeline not ready, dropping request for %s", wh.ID)
+		return
+	}
+
 	result, claudeErr := m.callClaude(wh, req)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

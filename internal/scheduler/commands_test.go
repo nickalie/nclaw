@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -57,7 +58,7 @@ func TestExecuteBlocks_CreateTask(t *testing.T) {
 	errMsg := s.ExecuteBlocks(text, 100, 5)
 	assert.Empty(t, errMsg)
 
-	display := StripBlocks(text)
+	display := strings.TrimSpace(scheduleBlockRe.ReplaceAllString(text, ""))
 	assert.Contains(t, display, "I'll set that up.")
 	assert.Contains(t, display, "Done!")
 	assert.NotContains(t, display, "nclaw:schedule")
@@ -170,18 +171,6 @@ func TestExecuteBlocks_MixedSuccessAndError(t *testing.T) {
 	var tasks []model.ScheduledTask
 	require.NoError(t, s.db.Find(&tasks).Error)
 	assert.Len(t, tasks, 1)
-}
-
-func TestStripBlocks(t *testing.T) {
-	text := "before\n```nclaw:schedule\n{\"action\":\"create\"}\n```\nafter"
-	result := StripBlocks(text)
-	assert.NotContains(t, result, "nclaw:schedule")
-	assert.Contains(t, result, "before")
-	assert.Contains(t, result, "after")
-}
-
-func TestStripBlocks_NoBlocks(t *testing.T) {
-	assert.Equal(t, "hello", StripBlocks("hello"))
 }
 
 func TestTruncate(t *testing.T) {

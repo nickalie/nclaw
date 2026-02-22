@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,7 +27,7 @@ func setupTestManager(t *testing.T) *Manager {
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
 	mgr := NewManager(database, "example.com", t.TempDir(), telegram.NewChatLocker())
-	mgr.SetPipeline(pipeline.New(noopSend, nil))
+	mgr.SetPipeline(pipeline.New(noopSend, nil, true))
 	return mgr
 }
 
@@ -57,7 +58,7 @@ func TestExecuteBlocks_CreateWebhookFull(t *testing.T) {
 	statusMsg := m.ExecuteBlocks(text, 100, 5)
 	assert.Contains(t, statusMsg, "[Webhook created: https://example.com/webhooks/")
 
-	display := StripBlocksClean(text)
+	display := strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
 	assert.Contains(t, display, "Setting up.")
 	assert.Contains(t, display, "Done!")
 	assert.NotContains(t, display, "nclaw:webhook")
@@ -175,25 +176,6 @@ func TestExecuteBlocks_MixedSuccessAndError(t *testing.T) {
 	result := m.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "[Webhook created:")
 	assert.Contains(t, result, "[Webhook error:")
-}
-
-func TestStripBlocksClean(t *testing.T) {
-	text := "before\n```nclaw:webhook\n{\"action\":\"list\"}\n```\nafter"
-	result := StripBlocksClean(text)
-	assert.NotContains(t, result, "nclaw:webhook")
-	assert.Contains(t, result, "before")
-	assert.Contains(t, result, "after")
-	assert.NotContains(t, result, "not configured")
-}
-
-func TestStripBlocksClean_NoBlocks(t *testing.T) {
-	assert.Equal(t, "hello", StripBlocksClean("hello"))
-}
-
-func TestStripBlocksClean_Empty(t *testing.T) {
-	text := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
-	result := StripBlocksClean(text)
-	assert.Empty(t, result)
 }
 
 func TestCreate(t *testing.T) {

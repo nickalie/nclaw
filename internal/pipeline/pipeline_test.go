@@ -60,7 +60,7 @@ func (m *mockSendDoc) fn() func(context.Context, int64, int, string, []byte, str
 func TestProcess_SuccessPath(t *testing.T) {
 	exec := &mockExecutor{}
 	ms := &mockSend{}
-	p := New(ms.fn(), nil, exec)
+	p := New(ms.fn(), nil, true, exec)
 
 	result := &claude.Result{
 		Text:     "Hello world",
@@ -79,7 +79,7 @@ func TestProcess_SuccessPath(t *testing.T) {
 func TestProcess_ErrorPath_SkipsExecution(t *testing.T) {
 	exec := &mockExecutor{}
 	ms := &mockSend{}
-	p := New(ms.fn(), nil, exec)
+	p := New(ms.fn(), nil, true, exec)
 
 	result := &claude.Result{
 		Text:     "error: something went wrong",
@@ -96,7 +96,7 @@ func TestProcess_NilWebhookExecutor_Filtered(t *testing.T) {
 	exec := &mockExecutor{msg: "scheduled ok"}
 	ms := &mockSend{}
 	// Pass a nil executor alongside a real one — nil should be filtered.
-	p := New(ms.fn(), nil, exec, nil)
+	p := New(ms.fn(), nil, true, exec, nil)
 
 	result := &claude.Result{Text: "reply", FullText: "reply"}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
@@ -109,7 +109,7 @@ func TestProcess_StatusAppending(t *testing.T) {
 	exec1 := &mockExecutor{msg: "[Schedule error: oops]"}
 	exec2 := &mockExecutor{msg: "[Webhook created: https://example.com/webhooks/abc]"}
 	ms := &mockSend{}
-	p := New(ms.fn(), nil, exec1, exec2)
+	p := New(ms.fn(), nil, true, exec1, exec2)
 
 	result := &claude.Result{Text: "Done", FullText: "Done"}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
@@ -122,7 +122,7 @@ func TestProcess_StatusAppending(t *testing.T) {
 
 func TestProcess_EmptyText_NoSend(t *testing.T) {
 	ms := &mockSend{}
-	p := New(ms.fn(), nil)
+	p := New(ms.fn(), nil, true)
 
 	result := &claude.Result{Text: "", FullText: ""}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
@@ -132,7 +132,7 @@ func TestProcess_EmptyText_NoSend(t *testing.T) {
 
 func TestProcess_StripsAllBlockTypes(t *testing.T) {
 	ms := &mockSend{}
-	p := New(ms.fn(), nil)
+	p := New(ms.fn(), nil, true)
 
 	text := "Hello\n" +
 		"```nclaw:sendfile\n{\"path\":\"test.txt\"}\n```\n" +
@@ -160,7 +160,7 @@ func TestProcess_HTMLFallbackToPlainText(t *testing.T) {
 		}
 		return nil
 	}
-	p := New(sendFn, nil)
+	p := New(sendFn, nil, true)
 
 	result := &claude.Result{Text: "Hello", FullText: "Hello"}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
@@ -172,7 +172,7 @@ func TestProcess_MultipleExecutors(t *testing.T) {
 	exec1 := &mockExecutor{}
 	exec2 := &mockExecutor{}
 	ms := &mockSend{}
-	p := New(ms.fn(), nil, exec1, exec2)
+	p := New(ms.fn(), nil, true, exec1, exec2)
 
 	result := &claude.Result{Text: "reply", FullText: "full reply"}
 	p.Process(context.Background(), result, nil, 100, 5, "/tmp")
@@ -184,7 +184,7 @@ func TestProcess_MultipleExecutors(t *testing.T) {
 }
 
 func TestNew_NilExecutorsFiltered(t *testing.T) {
-	p := New(nil, nil, nil, nil)
+	p := New(nil, nil, true, nil, nil)
 	assert.Empty(t, p.executors)
 }
 
@@ -207,4 +207,32 @@ func TestAppendStatus_WithMessages(t *testing.T) {
 func TestAppendStatus_EmptyBase(t *testing.T) {
 	result := appendStatus("", []string{"msg"})
 	assert.Equal(t, "msg", result)
+}
+
+func TestProcess_WebhooksNotConfigured_WarningAppended(t *testing.T) {
+	ms := &mockSend{}
+	p := New(ms.fn(), nil, false) // webhooksConfigured=false
+
+	text := "Here you go.\n```nclaw:webhook\n{\"action\":\"create\",\"description\":\"test\"}\n```\nDone!"
+	result := &claude.Result{Text: text, FullText: text}
+	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
+
+	require.Len(t, ms.calls, 1)
+	assert.Contains(t, ms.calls[0].text, "Here you go.")
+	assert.Contains(t, ms.calls[0].text, "Done!")
+	assert.NotContains(t, ms.calls[0].text, "nclaw:webhook")
+	assert.Contains(t, ms.calls[0].text, "[Webhooks are not configured on this instance]")
+}
+
+func TestProcess_WebhooksConfigured_NoWarning(t *testing.T) {
+	exec := &mockExecutor{}
+	ms := &mockSend{}
+	p := New(ms.fn(), nil, true, exec) // webhooksConfigured=true
+
+	text := "Done.\n```nclaw:webhook\n{\"action\":\"create\"}\n```"
+	result := &claude.Result{Text: text, FullText: text}
+	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
+
+	require.Len(t, ms.calls, 1)
+	assert.NotContains(t, ms.calls[0].text, "not configured")
 }

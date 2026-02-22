@@ -30,13 +30,16 @@ var (
 // Pipeline orchestrates post-Claude response processing: block execution,
 // stripping, status appending, file sending, and reply delivery.
 type Pipeline struct {
-	executors []BlockExecutor
-	sendDoc   sendfile.SendDocFunc
-	send      SendFunc
+	executors          []BlockExecutor
+	sendDoc            sendfile.SendDocFunc
+	send               SendFunc
+	webhooksConfigured bool
 }
 
 // New creates a Pipeline. Nil executors are silently filtered out.
-func New(send SendFunc, sendDoc sendfile.SendDocFunc, executors ...BlockExecutor) *Pipeline {
+// webhooksConfigured indicates whether a webhook executor is present, used to
+// warn users when webhook blocks appear but webhooks are not enabled.
+func New(send SendFunc, sendDoc sendfile.SendDocFunc, webhooksConfigured bool, executors ...BlockExecutor) *Pipeline {
 	var filtered []BlockExecutor
 	for _, e := range executors {
 		if e != nil {
@@ -44,9 +47,10 @@ func New(send SendFunc, sendDoc sendfile.SendDocFunc, executors ...BlockExecutor
 		}
 	}
 	return &Pipeline{
-		executors: filtered,
-		sendDoc:   sendDoc,
-		send:      send,
+		executors:          filtered,
+		sendDoc:            sendDoc,
+		send:               send,
+		webhooksConfigured: webhooksConfigured,
 	}
 }
 
@@ -73,6 +77,11 @@ func (p *Pipeline) Process(
 
 	// Phase 2: Strip all command block syntax from display text.
 	text := stripAllBlocks(result.Text)
+
+	// Warn if webhook blocks were found but webhooks aren't configured.
+	if !p.webhooksConfigured && webhookBlockRe.MatchString(result.Text) {
+		statusMsgs = append(statusMsgs, "[Webhooks are not configured on this instance]")
+	}
 
 	// Phase 3: Append status messages from block execution.
 	text = appendStatus(text, statusMsgs)
@@ -115,4 +124,5 @@ func (p *Pipeline) sendChunk(ctx context.Context, chatID int64, threadID int, te
 			log.Printf("pipeline: send parseMode=%q error: %v", mode, err)
 		}
 	}
+	log.Printf("pipeline: failed to send message to chat=%d thread=%d (all modes failed)", chatID, threadID)
 }

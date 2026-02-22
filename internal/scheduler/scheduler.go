@@ -403,7 +403,7 @@ func (s *Scheduler) sendResult(task *model.ScheduledTask, result *claude.Result,
 	defer cancel()
 
 	dir := telegram.ChatDir(s.dataDir, task.ChatID, task.ThreadID)
-	s.pipeline.Process(ctx, result, nil, task.ChatID, task.ThreadID, dir)
+	s.pipeline.Process(ctx, result, runErr, task.ChatID, task.ThreadID, dir)
 }
 
 func (s *Scheduler) getNextRun(jobID uuid.UUID) *time.Time {
