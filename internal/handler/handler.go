@@ -80,7 +80,11 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	// Always strip command block syntax from display text.
 	displayText := sendfile.StripBlocks(result.Text)
 	displayText = scheduler.StripBlocks(displayText)
-	displayText = webhook.StripBlocks(displayText)
+	if h.WebhookManager != nil {
+		displayText = webhook.StripBlocksClean(displayText)
+	} else {
+		displayText = webhook.StripBlocks(displayText)
+	}
 
 	if displayText != "" {
 		sendReply(ctx, b, chatID, threadID, displayText)
