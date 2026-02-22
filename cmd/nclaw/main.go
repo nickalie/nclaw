@@ -15,6 +15,7 @@ import (
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/handler"
+	"github.com/nickalie/nclaw/internal/pipeline"
 	"github.com/nickalie/nclaw/internal/scheduler"
 	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
@@ -47,7 +48,6 @@ func main() {
 	}
 
 	sendDoc := newSendDocFunc(b)
-	h.SendDoc = sendDoc
 	sched, err := scheduler.New(database, newSendFunc(b), sendDoc, config.Timezone(), config.DataDir(), chatLocker)
 	if err != nil {
 		log.Fatal("scheduler: ", err)
@@ -58,7 +58,13 @@ func main() {
 	h.Scheduler = sched
 
 	webhookSrv, webhookMgr := startWebhooks(database, b, chatLocker)
-	h.WebhookManager = webhookMgr
+
+	// Build pipeline executors; avoid Go nil interface trap for webhookMgr.
+	executors := []pipeline.BlockExecutor{sched}
+	if webhookMgr != nil {
+		executors = append(executors, webhookMgr)
+	}
+	h.Pipeline = pipeline.New(newPipelineSendFunc(b), sendDoc, executors...)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
@@ -114,7 +120,7 @@ func newSendFunc(b *bot.Bot) scheduler.SendFunc {
 	}
 }
 
-func newWebhookSendFunc(b *bot.Bot) webhook.SendFunc {
+func newPipelineSendFunc(b *bot.Bot) pipeline.SendFunc {
 	return func(ctx context.Context, chatID int64, threadID int, text, parseMode string) error {
 		params := &bot.SendMessageParams{
 			ChatID:          chatID,
@@ -137,7 +143,19 @@ func startWebhooks(
 		return nil, nil
 	}
 
-	mgr := webhook.NewManager(database, newWebhookSendFunc(b), domain, config.DataDir(), chatLocker)
+	send := webhook.SendFunc(func(ctx context.Context, chatID int64, threadID int, text, parseMode string) error {
+		params := &bot.SendMessageParams{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			Text:            text,
+		}
+		if parseMode != "" {
+			params.ParseMode = models.ParseMode(parseMode)
+		}
+		_, err := b.SendMessage(ctx, params)
+		return err
+	})
+	mgr := webhook.NewManager(database, send, domain, config.DataDir(), chatLocker)
 	srv := webhook.NewServer(mgr)
 
 	listenErr := make(chan error, 1)

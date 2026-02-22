@@ -15,11 +15,11 @@ Three input channels (handler, scheduler, webhook) independently implement post-
 - [x] Create `internal/pipeline/pipeline_test.go` with mock `BlockExecutor`: success path, error path skips execution, nil webhook, status appending, empty text
 
 ### Task 2: Refactor handler to use pipeline
-- [ ] Replace `WebhookManager` and `SendDoc` fields with `Pipeline *pipeline.Pipeline`
-- [ ] Simplify `callClaude()`: keep only Claude invocation + `FormatTaskList`, remove all block logic
-- [ ] Simplify `processMessage()`: call `h.Pipeline.Process()`, remove manual block processing
-- [ ] Remove `appendStatus()`, `sendReply()`, `sendChunk()` (moved to pipeline)
-- [ ] Update `handler_test.go` for new struct fields
+- [x] Replace `WebhookManager` and `SendDoc` fields with `Pipeline *pipeline.Pipeline`
+- [x] Simplify `callClaude()`: keep only Claude invocation + `FormatTaskList`, remove all block logic
+- [x] Simplify `processMessage()`: call `h.Pipeline.Process()`, remove manual block processing
+- [x] Remove `appendStatus()`, `sendReply()`, `sendChunk()` (moved to pipeline)
+- [x] Update `handler_test.go` for new struct fields
 
 ### Task 3: Refactor scheduler to use pipeline
 - [ ] Add `pipeline` field + `SetPipeline()` method to `Scheduler`
