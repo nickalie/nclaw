@@ -12,7 +12,6 @@ import (
 )
 
 var scheduleBlockRe = regexp.MustCompile("(?s)```nclaw:schedule\n(.*?)\n```")
-var webhookBlockRe = regexp.MustCompile("(?s)```nclaw:webhook\n(.*?)\n```")
 
 // StripBlocks removes nclaw:schedule code blocks from text without executing them.
 func StripBlocks(text string) string {

@@ -48,12 +48,10 @@ func main() {
 	}
 
 	sendDoc := newSendDocFunc(b)
-	sched, err := scheduler.New(database, newSendFunc(b), sendDoc, config.Timezone(), config.DataDir(), chatLocker)
+	sched, err := scheduler.New(database, newSendFunc(b), config.Timezone(), config.DataDir(), chatLocker)
 	if err != nil {
 		log.Fatal("scheduler: ", err)
 	}
-	sched.LoadTasks()
-	sched.Start()
 
 	h.Scheduler = sched
 
@@ -64,7 +62,12 @@ func main() {
 	if webhookMgr != nil {
 		executors = append(executors, webhookMgr)
 	}
-	h.Pipeline = pipeline.New(newPipelineSendFunc(b), sendDoc, executors...)
+	p := pipeline.New(newPipelineSendFunc(b), sendDoc, executors...)
+	h.Pipeline = p
+	sched.SetPipeline(p)
+
+	sched.LoadTasks()
+	sched.Start()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()

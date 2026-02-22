@@ -22,11 +22,11 @@ Three input channels (handler, scheduler, webhook) independently implement post-
 - [x] Update `handler_test.go` for new struct fields
 
 ### Task 3: Refactor scheduler to use pipeline
-- [ ] Add `pipeline` field + `SetPipeline()` method to `Scheduler`
-- [ ] Remove `sendDoc` from `Scheduler` struct and `New()` constructor
-- [ ] Simplify `sendResult()`: delegate to `s.pipeline.Process()`
-- [ ] Remove `webhookBlockRe` from `commands.go`
-- [ ] Update scheduler tests for new constructor signature
+- [x] Add `pipeline` field + `SetPipeline()` method to `Scheduler`
+- [x] Remove `sendDoc` from `Scheduler` struct and `New()` constructor
+- [x] Simplify `sendResult()`: delegate to `s.pipeline.Process()`
+- [x] Remove `webhookBlockRe` from `commands.go`
+- [x] Update scheduler tests for new constructor signature
 
 ### Task 4: Refactor webhook to use pipeline
 - [ ] Add `pipeline` field + `SetPipeline()` method to `Manager`

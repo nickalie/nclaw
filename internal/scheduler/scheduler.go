@@ -17,7 +17,7 @@ import (
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
-	"github.com/nickalie/nclaw/internal/sendfile"
+	"github.com/nickalie/nclaw/internal/pipeline"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
 
@@ -29,7 +29,7 @@ type Scheduler struct {
 	cron       gocron.Scheduler
 	db         *gorm.DB
 	send       SendFunc
-	sendDoc    sendfile.SendDocFunc
+	pipeline   *pipeline.Pipeline
 	dataDir    string
 	loc        *time.Location
 	chatLocker *telegram.ChatLocker
@@ -41,7 +41,7 @@ type Scheduler struct {
 
 // New creates a new Scheduler.
 func New(
-	database *gorm.DB, send SendFunc, sendDoc sendfile.SendDocFunc,
+	database *gorm.DB, send SendFunc,
 	timezone, dataDir string, chatLocker *telegram.ChatLocker,
 ) (*Scheduler, error) {
 	loc, err := time.LoadLocation(timezone)
@@ -59,7 +59,6 @@ func New(
 		cron:       cron,
 		db:         database,
 		send:       send,
-		sendDoc:    sendDoc,
 		dataDir:    dataDir,
 		loc:        loc,
 		chatLocker: chatLocker,
@@ -67,6 +66,11 @@ func New(
 		running:    make(map[string]bool),
 		canceled:   make(map[string]bool),
 	}, nil
+}
+
+// SetPipeline sets the pipeline for post-Claude response processing.
+func (s *Scheduler) SetPipeline(p *pipeline.Pipeline) {
+	s.pipeline = p
 }
 
 // Start begins the gocron scheduler.
@@ -400,33 +404,11 @@ func (s *Scheduler) sendResult(task *model.ScheduledTask, result *claude.Result,
 		}
 	}
 
-	// Execute schedule commands from ALL assistant messages (e.g. cancel self).
-	schedMsg := s.ExecuteBlocks(result.FullText, task.ChatID, task.ThreadID)
-
-	// Strip command blocks from display text.
-	text := StripBlocks(result.Text)
-	text = strings.TrimSpace(webhookBlockRe.ReplaceAllString(text, ""))
-	if schedMsg != "" {
-		text = strings.TrimSpace(text + "\n\n" + schedMsg)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Process sendfile blocks from ALL assistant messages.
 	dir := telegram.ChatDir(s.dataDir, task.ChatID, task.ThreadID)
-	sendfile.ExecuteBlocks(ctx, s.sendDoc, result.FullText, task.ChatID, task.ThreadID, dir)
-	text = sendfile.StripBlocks(text)
-
-	if text == "" {
-		return
-	}
-
-	if err := s.send(ctx, task.ChatID, task.ThreadID, text); err != nil {
-		log.Printf("scheduler: send result for task %s: %v", task.ID, err)
-	} else {
-		log.Printf("scheduler: sent result for task %s to chat=%d thread=%d", task.ID, task.ChatID, task.ThreadID)
-	}
+	s.pipeline.Process(ctx, result, nil, task.ChatID, task.ThreadID, dir)
 }
 
 func (s *Scheduler) getNextRun(jobID uuid.UUID) *time.Time {

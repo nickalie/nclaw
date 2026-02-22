@@ -12,7 +12,6 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/nickalie/nclaw/internal/model"
-	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
 
@@ -25,10 +24,7 @@ func setupTestScheduler(t *testing.T) *Scheduler {
 	require.NoError(t, database.AutoMigrate(&model.ScheduledTask{}, &model.TaskRunLog{}))
 
 	noopSend := func(_ context.Context, _ int64, _ int, _ string) error { return nil }
-	noopSendDoc := sendfile.SendDocFunc(func(_ context.Context, _ int64, _ int, _ string, _ []byte, _ string) error {
-		return nil
-	})
-	sched, err := New(database, noopSend, noopSendDoc, "UTC", t.TempDir(), telegram.NewChatLocker())
+	sched, err := New(database, noopSend, "UTC", t.TempDir(), telegram.NewChatLocker())
 	require.NoError(t, err)
 	return sched
 }
