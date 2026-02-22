@@ -17,7 +17,7 @@ var noopSendDoc SendDocFunc = func(_ context.Context, _ int64, _ int, _ string, 
 
 func TestExecuteBlocks_NoMatch(t *testing.T) {
 	// Should not panic with nil sendDoc when there are no blocks.
-	ExecuteBlocks(context.TODO(), nil, "plain reply", 0, 0, "")
+	ExecuteBlocks(context.TODO(), nil, nil, "plain reply", 0, 0, "")
 }
 
 func TestExecuteBlocks_SendsFile(t *testing.T) {
@@ -37,7 +37,7 @@ func TestExecuteBlocks_SendsFile(t *testing.T) {
 	}
 
 	text := "text\n```nclaw:sendfile\n{\"path\":\"test.txt\",\"caption\":\"cap\"}\n```\nmore"
-	ExecuteBlocks(context.TODO(), sendDoc, text, 42, 0, dir)
+	ExecuteBlocks(context.TODO(), sendDoc, nil, text, 42, 0, dir)
 
 	assert.True(t, sent)
 	assert.Equal(t, "text\n\nmore", StripBlocks(text))
@@ -57,7 +57,7 @@ func TestExecuteBlocks_SendsFileAbsolutePath(t *testing.T) {
 	}
 
 	text := fmt.Sprintf("```nclaw:sendfile\n{\"path\":%q}\n```", filePath)
-	ExecuteBlocks(context.TODO(), sendDoc, text, 1, 0, dir)
+	ExecuteBlocks(context.TODO(), sendDoc, nil, text, 1, 0, dir)
 
 	assert.True(t, sent)
 	assert.Empty(t, StripBlocks(text))
@@ -72,7 +72,7 @@ func TestExecuteBlocks_PathTraversal(t *testing.T) {
 	}
 
 	text := "```nclaw:sendfile\n{\"path\":\"../../../etc/passwd\"}\n```"
-	ExecuteBlocks(context.TODO(), sendDoc, text, 1, 0, dir)
+	ExecuteBlocks(context.TODO(), sendDoc, nil, text, 1, 0, dir)
 
 	assert.False(t, called, "sendDoc should not be called for path traversal attempts")
 }
@@ -88,7 +88,7 @@ func TestExecuteBlocks_SendDocError(t *testing.T) {
 
 	text := "before\n```nclaw:sendfile\n{\"path\":\"err.txt\"}\n```\nafter"
 	// Should not panic on sendDoc error.
-	ExecuteBlocks(context.TODO(), sendDoc, text, 1, 0, dir)
+	ExecuteBlocks(context.TODO(), sendDoc, nil, text, 1, 0, dir)
 
 	// Block should still be stripped by StripBlocks.
 	assert.Equal(t, "before\n\nafter", StripBlocks(text))
@@ -97,7 +97,7 @@ func TestExecuteBlocks_SendDocError(t *testing.T) {
 func TestExecuteBlocks_InvalidJSON(t *testing.T) {
 	text := "text\n```nclaw:sendfile\n{invalid json}\n```\nmore"
 	// Should not panic on invalid JSON.
-	ExecuteBlocks(context.TODO(), noopSendDoc, text, 1, 0, "")
+	ExecuteBlocks(context.TODO(), noopSendDoc, nil, text, 1, 0, "")
 	assert.Equal(t, "text\n\nmore", StripBlocks(text))
 }
 
@@ -108,8 +108,74 @@ func TestExecuteBlocks_NilSendDoc(t *testing.T) {
 
 	text := "text\n```nclaw:sendfile\n{\"path\":\"test.txt\"}\n```\nmore"
 	// Should not panic with nil sendDoc.
-	ExecuteBlocks(context.TODO(), nil, text, 1, 0, dir)
+	ExecuteBlocks(context.TODO(), nil, nil, text, 1, 0, dir)
 	assert.Equal(t, "text\n\nmore", StripBlocks(text))
+}
+
+func TestExecuteBlocks_MediaGroup(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.png"), []byte("img1"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.png"), []byte("img2"), 0o644))
+
+	var groupSent bool
+	var sentFiles []File
+	sendMediaGroup := func(_ context.Context, chatID int64, threadID int, files []File) error {
+		groupSent = true
+		sentFiles = files
+		assert.Equal(t, int64(10), chatID)
+		assert.Equal(t, 5, threadID)
+		return nil
+	}
+
+	text := "```nclaw:sendfile\n{\"path\":\"a.png\",\"caption\":\"first\"}\n```\n" +
+		"```nclaw:sendfile\n{\"path\":\"b.png\",\"caption\":\"second\"}\n```"
+	ExecuteBlocks(context.TODO(), nil, sendMediaGroup, text, 10, 5, dir)
+
+	assert.True(t, groupSent)
+	require.Len(t, sentFiles, 2)
+	assert.Equal(t, "a.png", sentFiles[0].Filename)
+	assert.Equal(t, "b.png", sentFiles[1].Filename)
+	assert.Equal(t, "first", sentFiles[0].Caption)
+	assert.Equal(t, "second", sentFiles[1].Caption)
+}
+
+func TestExecuteBlocks_SingleFileFallsBackToSendDoc(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "only.txt"), []byte("data"), 0o644))
+
+	var docSent bool
+	sendDoc := func(_ context.Context, _ int64, _ int, _ string, _ []byte, _ string) error {
+		docSent = true
+		return nil
+	}
+	var groupCalled bool
+	sendMediaGroup := func(_ context.Context, _ int64, _ int, _ []File) error {
+		groupCalled = true
+		return nil
+	}
+
+	text := "```nclaw:sendfile\n{\"path\":\"only.txt\"}\n```"
+	ExecuteBlocks(context.TODO(), sendDoc, sendMediaGroup, text, 1, 0, dir)
+
+	assert.True(t, docSent, "single file should use sendDoc")
+	assert.False(t, groupCalled, "single file should not use media group")
+}
+
+func TestExecuteBlocks_NilMediaGroupFallsBackToSendDoc(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0o644))
+
+	var docCount int
+	sendDoc := func(_ context.Context, _ int64, _ int, _ string, _ []byte, _ string) error {
+		docCount++
+		return nil
+	}
+
+	text := "```nclaw:sendfile\n{\"path\":\"a.txt\"}\n```\n```nclaw:sendfile\n{\"path\":\"b.txt\"}\n```"
+	ExecuteBlocks(context.TODO(), sendDoc, nil, text, 1, 0, dir)
+
+	assert.Equal(t, 2, docCount, "without media group func, should fall back to individual sends")
 }
 
 func TestIsAllowedPath(t *testing.T) {

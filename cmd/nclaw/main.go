@@ -62,7 +62,8 @@ func main() {
 	if webhookMgr != nil {
 		executors = append(executors, webhookMgr)
 	}
-	p := pipeline.New(newPipelineSendFunc(b), sendDoc, webhookMgr != nil, executors...)
+	sendMediaGroup := newSendMediaGroupFunc(b)
+	p := pipeline.New(newPipelineSendFunc(b), sendDoc, sendMediaGroup, webhookMgr != nil, executors...)
 	h.Pipeline = p
 	sched.SetPipeline(p)
 	if webhookMgr != nil {
@@ -115,6 +116,25 @@ func newSendDocFunc(b *bot.Bot) sendfile.SendDocFunc {
 			MessageThreadID: threadID,
 			Document:        &models.InputFileUpload{Filename: filename, Data: bytes.NewReader(data)},
 			Caption:         caption,
+		})
+		return err
+	}
+}
+
+func newSendMediaGroupFunc(b *bot.Bot) sendfile.SendMediaGroupFunc {
+	return func(ctx context.Context, chatID int64, threadID int, files []sendfile.File) error {
+		media := make([]models.InputMedia, len(files))
+		for i, f := range files {
+			media[i] = &models.InputMediaDocument{
+				Media:           "attach://" + f.Filename,
+				Caption:         f.Caption,
+				MediaAttachment: bytes.NewReader(f.Data),
+			}
+		}
+		_, err := b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			Media:           media,
 		})
 		return err
 	}
