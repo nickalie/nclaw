@@ -7,15 +7,9 @@ import (
 	"github.com/go-telegram/bot/models"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/nickalie/nclaw/internal/config"
-	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/telegram"
-	"github.com/nickalie/nclaw/internal/webhook"
 )
 
 func TestWithReplyContext_NoReply(t *testing.T) {
@@ -221,78 +215,4 @@ func TestChatDir_WithThread(t *testing.T) {
 func TestBuildPrompt_NoAttachment(t *testing.T) {
 	result := buildPrompt(context.TODO(), nil, "just text", nil, "/tmp")
 	assert.Equal(t, "just text", result)
-}
-
-func setupTestWebhookManager(t *testing.T) *webhook.Manager {
-	t.Helper()
-	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	require.NoError(t, err)
-	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
-
-	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
-	return webhook.NewManager(database, send, "example.com", t.TempDir(), telegram.NewChatLocker())
-}
-
-func TestHandlerWebhookManager_NilStripsBlocks(t *testing.T) {
-	// With nil WebhookManager, webhook blocks are stripped with a warning (not executed).
-	text := "text\n```nclaw:webhook\n{\"action\":\"list\"}\n```\nmore"
-	text = webhook.StripBlocks(text)
-
-	assert.NotContains(t, text, "nclaw:webhook")
-	assert.Contains(t, text, "text")
-	assert.Contains(t, text, "more")
-	assert.Contains(t, text, "Webhooks are not configured")
-}
-
-func TestHandlerWebhookManager_ExecutesBlocks(t *testing.T) {
-	mgr := setupTestWebhookManager(t)
-
-	// Simulate the new callClaude flow: ExecuteBlocks on FullText, StripBlocksClean on Text.
-	fullText := "Here you go.\n```nclaw:webhook\n" +
-		`{"action":"create","description":"test hook"}` +
-		"\n```\nDone!"
-
-	webhookMsg := mgr.ExecuteBlocks(fullText, 100, 0)
-	displayText := webhook.StripBlocksClean(fullText)
-	displayText = appendStatus(displayText, "", webhookMsg)
-
-	assert.NotContains(t, displayText, "nclaw:webhook")
-	assert.Contains(t, displayText, "Here you go.")
-	assert.Contains(t, displayText, "Done!")
-	assert.Contains(t, displayText, "[Webhook created: https://example.com/webhooks/")
-}
-
-func TestHandlerWebhookManager_ListEmpty(t *testing.T) {
-	mgr := setupTestWebhookManager(t)
-
-	// Simulate the new callClaude flow.
-	fullText := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
-
-	webhookMsg := mgr.ExecuteBlocks(fullText, 100, 0)
-	displayText := webhook.StripBlocksClean(fullText)
-	displayText = appendStatus(displayText, "", webhookMsg)
-
-	assert.Contains(t, displayText, "[No webhooks registered]")
-	assert.NotContains(t, displayText, "nclaw:webhook")
-}
-
-func TestAppendStatus_NoMessages(t *testing.T) {
-	assert.Equal(t, "hello", appendStatus("hello", "", ""))
-}
-
-func TestAppendStatus_ScheduleMessage(t *testing.T) {
-	result := appendStatus("text", "[Schedule error: oops]", "")
-	assert.Equal(t, "text\n\n[Schedule error: oops]", result)
-}
-
-func TestAppendStatus_BothMessages(t *testing.T) {
-	result := appendStatus("text", "sched msg", "webhook msg")
-	assert.Equal(t, "text\n\nsched msg\n\nwebhook msg", result)
-}
-
-func TestAppendStatus_EmptyBase(t *testing.T) {
-	result := appendStatus("", "msg", "")
-	assert.Equal(t, "msg", result)
 }

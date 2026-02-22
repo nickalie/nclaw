@@ -26,9 +26,9 @@ docker run -d --name nclaw --env-file .env nclaw
 You message the Telegram bot. It invokes the Claude Code CLI, preserving conversation history per chat thread, and sends back the response.
 
 ```
-Telegram --> nclaw --> Claude Code CLI (in container) --> Telegram
-                   --> Scheduler (recurring/one-time tasks)
-                   --> Webhook Server (incoming HTTP callbacks)
+Telegram  -\
+Scheduler -->  Claude Code CLI (in container)  -->  Telegram
+Webhook   -/
 ```
 
 Claude runs inside a Docker container that serves as the security sandbox. The image ships with git, GitHub CLI, Chromium, Go, Node.js, and Python/uv — making it a capable assistant out of the box.
