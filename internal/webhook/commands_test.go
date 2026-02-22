@@ -45,23 +45,18 @@ func TestWebhookBlockRegex_NoMatch(t *testing.T) {
 	assert.Empty(t, matches)
 }
 
-func TestProcessReply_NoBlocks(t *testing.T) {
+func TestExecuteBlocks_CreateWebhookFull(t *testing.T) {
 	m := setupTestManager(t)
-	result := m.ProcessReply("plain reply", 100, 0)
-	assert.Equal(t, "plain reply", result)
-}
-
-func TestProcessReply_CreateWebhook(t *testing.T) {
-	m := setupTestManager(t)
-	reply := "Setting up.\n```nclaw:webhook\n" +
+	text := "Setting up.\n```nclaw:webhook\n" +
 		`{"action":"create","description":"GitHub push events"}` +
 		"\n```\nDone!"
-	result := m.ProcessReply(reply, 100, 5)
+	statusMsg := m.ExecuteBlocks(text, 100, 5)
+	assert.Contains(t, statusMsg, "[Webhook created: https://example.com/webhooks/")
 
-	assert.Contains(t, result, "Setting up.")
-	assert.Contains(t, result, "Done!")
-	assert.NotContains(t, result, "nclaw:webhook")
-	assert.Contains(t, result, "[Webhook created: https://example.com/webhooks/")
+	display := StripBlocksClean(text)
+	assert.Contains(t, display, "Setting up.")
+	assert.Contains(t, display, "Done!")
+	assert.NotContains(t, display, "nclaw:webhook")
 
 	// Verify webhook was created in DB.
 	webhooks, err := m.List(100, 5)
@@ -71,25 +66,24 @@ func TestProcessReply_CreateWebhook(t *testing.T) {
 	assert.Equal(t, model.WebhookStatusActive, webhooks[0].Status)
 }
 
-func TestProcessReply_CreateMissingDescription(t *testing.T) {
+func TestExecuteBlocks_CreateMissingDescription(t *testing.T) {
 	m := setupTestManager(t)
-	reply := "```nclaw:webhook\n{\"action\":\"create\"}\n```"
-	result := m.ProcessReply(reply, 100, 0)
+	text := "```nclaw:webhook\n{\"action\":\"create\"}\n```"
+	result := m.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "Webhook error")
 	assert.Contains(t, result, "create requires description")
 }
 
-func TestProcessReply_DeleteWebhook(t *testing.T) {
+func TestExecuteBlocks_DeleteWebhook(t *testing.T) {
 	m := setupTestManager(t)
 
 	wh, err := m.Create("test hook", 100, 0)
 	require.NoError(t, err)
 
-	reply := "```nclaw:webhook\n" +
+	text := "```nclaw:webhook\n" +
 		`{"action":"delete","webhook_id":"` + wh.ID + `"}` +
 		"\n```"
-	result := m.ProcessReply(reply, 100, 0)
-
+	result := m.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "[Webhook deleted: "+wh.ID+"]")
 	assert.NotContains(t, result, "Webhook error")
 
@@ -98,22 +92,22 @@ func TestProcessReply_DeleteWebhook(t *testing.T) {
 	assert.Empty(t, webhooks)
 }
 
-func TestProcessReply_DeleteMissingID(t *testing.T) {
+func TestExecuteBlocks_DeleteMissingID(t *testing.T) {
 	m := setupTestManager(t)
-	reply := "```nclaw:webhook\n{\"action\":\"delete\"}\n```"
-	result := m.ProcessReply(reply, 100, 0)
+	text := "```nclaw:webhook\n{\"action\":\"delete\"}\n```"
+	result := m.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "Webhook error")
 	assert.Contains(t, result, "delete requires webhook_id")
 }
 
-func TestProcessReply_ListEmpty(t *testing.T) {
+func TestExecuteBlocks_ListEmpty(t *testing.T) {
 	m := setupTestManager(t)
-	reply := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
-	result := m.ProcessReply(reply, 100, 0)
+	text := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
+	result := m.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "[No webhooks registered]")
 }
 
-func TestProcessReply_ListWithWebhooks(t *testing.T) {
+func TestExecuteBlocks_ListWithWebhooks(t *testing.T) {
 	m := setupTestManager(t)
 
 	_, err := m.Create("hook one", 100, 0)
@@ -121,24 +115,24 @@ func TestProcessReply_ListWithWebhooks(t *testing.T) {
 	_, err = m.Create("hook two", 100, 0)
 	require.NoError(t, err)
 
-	reply := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
-	result := m.ProcessReply(reply, 100, 0)
+	text := "```nclaw:webhook\n{\"action\":\"list\"}\n```"
+	result := m.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "hook one")
 	assert.Contains(t, result, "hook two")
 	assert.Contains(t, result, "https://example.com/webhooks/")
 }
 
-func TestProcessReply_InvalidJSON(t *testing.T) {
+func TestExecuteBlocks_InvalidJSON(t *testing.T) {
 	m := setupTestManager(t)
-	reply := "```nclaw:webhook\n{bad json}\n```"
-	result := m.ProcessReply(reply, 100, 0)
+	text := "```nclaw:webhook\n{bad json}\n```"
+	result := m.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "Webhook error")
 }
 
-func TestProcessReply_UnknownAction(t *testing.T) {
+func TestExecuteBlocks_UnknownAction(t *testing.T) {
 	m := setupTestManager(t)
-	reply := "```nclaw:webhook\n{\"action\":\"explode\"}\n```"
-	result := m.ProcessReply(reply, 100, 0)
+	text := "```nclaw:webhook\n{\"action\":\"explode\"}\n```"
+	result := m.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "Webhook error")
 	assert.Contains(t, result, "unknown action")
 }

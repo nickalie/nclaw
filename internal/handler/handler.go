@@ -74,11 +74,13 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	// Only execute command blocks when Claude succeeded; on error, partial
 	// output may contain incomplete or unintended command blocks.
 	if claudeErr == nil {
-		sendfile.ProcessReply(ctx, h.SendDoc, result.FullText, chatID, threadID, dir)
+		sendfile.ExecuteBlocks(ctx, h.SendDoc, result.FullText, chatID, threadID, dir)
 	}
 
 	// Always strip command block syntax from display text.
 	displayText := sendfile.StripBlocks(result.Text)
+	displayText = scheduler.StripBlocks(displayText)
+	displayText = webhook.StripBlocks(displayText)
 
 	if displayText != "" {
 		sendReply(ctx, b, chatID, threadID, displayText)

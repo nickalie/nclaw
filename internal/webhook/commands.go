@@ -63,40 +63,6 @@ func (m *Manager) ExecuteBlocks(text string, chatID int64, threadID int) string 
 	return strings.Join(msgs, "\n\n")
 }
 
-// ProcessReply extracts nclaw:webhook code blocks from a reply, executes them, and returns cleaned text.
-func (m *Manager) ProcessReply(reply string, chatID int64, threadID int) string {
-	matches := webhookBlockRe.FindAllStringSubmatchIndex(reply, -1)
-	if len(matches) == 0 {
-		return reply
-	}
-
-	var results []string
-	var errs []string
-
-	for _, match := range matches {
-		jsonStr := reply[match[2]:match[3]]
-		result, err := m.executeCommand(jsonStr, chatID, threadID)
-		if err != nil {
-			log.Printf("webhook: command error: %v", err)
-			errs = append(errs, err.Error())
-		} else if result != "" {
-			results = append(results, result)
-		}
-	}
-
-	cleaned := webhookBlockRe.ReplaceAllString(reply, "")
-	cleaned = strings.TrimSpace(cleaned)
-
-	if len(results) > 0 {
-		cleaned = appendSection(cleaned, strings.Join(results, "\n"))
-	}
-	if len(errs) > 0 {
-		cleaned = appendSection(cleaned, "[Webhook error: "+strings.Join(errs, "; ")+"]")
-	}
-
-	return cleaned
-}
-
 func (m *Manager) executeCommand(jsonStr string, chatID int64, threadID int) (string, error) {
 	var cmd webhookCommand
 	if err := json.Unmarshal([]byte(jsonStr), &cmd); err != nil {

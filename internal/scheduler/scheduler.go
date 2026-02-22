@@ -415,7 +415,7 @@ func (s *Scheduler) sendResult(task *model.ScheduledTask, result *claude.Result,
 
 	// Process sendfile blocks from ALL assistant messages.
 	dir := telegram.ChatDir(s.dataDir, task.ChatID, task.ThreadID)
-	sendfile.ProcessReply(ctx, s.sendDoc, result.FullText, task.ChatID, task.ThreadID, dir)
+	sendfile.ExecuteBlocks(ctx, s.sendDoc, result.FullText, task.ChatID, task.ThreadID, dir)
 	text = sendfile.StripBlocks(text)
 
 	if text == "" {

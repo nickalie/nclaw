@@ -51,33 +51,6 @@ func (s *Scheduler) ExecuteBlocks(text string, chatID int64, threadID int) strin
 	return ""
 }
 
-// ProcessReply extracts nclaw:schedule code blocks from a reply, executes them, and returns cleaned text.
-func (s *Scheduler) ProcessReply(reply string, chatID int64, threadID int) string {
-	matches := scheduleBlockRe.FindAllStringSubmatchIndex(reply, -1)
-	if len(matches) == 0 {
-		return reply
-	}
-
-	var errors []string
-
-	for _, match := range matches {
-		jsonStr := reply[match[2]:match[3]]
-		if err := s.executeCommand(jsonStr, chatID, threadID); err != nil {
-			log.Printf("scheduler: command error: %v", err)
-			errors = append(errors, err.Error())
-		}
-	}
-
-	cleaned := scheduleBlockRe.ReplaceAllString(reply, "")
-	cleaned = strings.TrimSpace(cleaned)
-
-	if len(errors) > 0 {
-		cleaned += "\n\n[Schedule error: " + strings.Join(errors, "; ") + "]"
-	}
-
-	return cleaned
-}
-
 func (s *Scheduler) executeCommand(jsonStr string, chatID int64, threadID int) error {
 	var cmd scheduleCommand
 	if err := json.Unmarshal([]byte(jsonStr), &cmd); err != nil {
