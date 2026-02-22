@@ -35,11 +35,11 @@ Three input channels (handler, scheduler, webhook) independently implement post-
 - [x] Update `callClaude()` to return `(*claude.Result, error)`
 
 ### Task 5: Update wiring in `cmd/nclaw/main.go`
-- [ ] Create single `SendFunc` (with `parseMode`) used by pipeline
-- [ ] Construct `Pipeline` with scheduler, webhook (nil-safe), sendDoc, sendFunc
-- [ ] Call `SetPipeline()` on scheduler and webhook before `Start()`
-- [ ] Remove old `h.SendDoc`, `h.WebhookManager`, `newSendFunc()`
-- [ ] Handle Go nil interface trap for webhook `BlockExecutor`
+- [x] Create single `SendFunc` (with `parseMode`) used by pipeline
+- [x] Construct `Pipeline` with scheduler, webhook (nil-safe), sendDoc, sendFunc
+- [x] Call `SetPipeline()` on scheduler and webhook before `Start()`
+- [x] Remove old `h.SendDoc`, `h.WebhookManager`, `newSendFunc()`
+- [x] Handle Go nil interface trap for webhook `BlockExecutor`
 
 ### Task 6: Finalize
 - [ ] Update `CLAUDE.md` project structure and patterns

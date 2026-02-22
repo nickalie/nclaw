@@ -21,14 +21,10 @@ import (
 	"github.com/nickalie/nclaw/internal/telegram"
 )
 
-// SendFunc sends a text message to a Telegram chat/thread.
-type SendFunc func(ctx context.Context, chatID int64, threadID int, text string) error
-
 // Scheduler manages scheduled tasks using gocron and SQLite persistence.
 type Scheduler struct {
 	cron       gocron.Scheduler
 	db         *gorm.DB
-	send       SendFunc
 	pipeline   *pipeline.Pipeline
 	dataDir    string
 	loc        *time.Location
@@ -41,7 +37,7 @@ type Scheduler struct {
 
 // New creates a new Scheduler.
 func New(
-	database *gorm.DB, send SendFunc,
+	database *gorm.DB,
 	timezone, dataDir string, chatLocker *telegram.ChatLocker,
 ) (*Scheduler, error) {
 	loc, err := time.LoadLocation(timezone)
@@ -58,7 +54,6 @@ func New(
 	return &Scheduler{
 		cron:       cron,
 		db:         database,
-		send:       send,
 		dataDir:    dataDir,
 		loc:        loc,
 		chatLocker: chatLocker,

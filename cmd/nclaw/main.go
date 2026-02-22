@@ -48,7 +48,7 @@ func main() {
 	}
 
 	sendDoc := newSendDocFunc(b)
-	sched, err := scheduler.New(database, newSendFunc(b), config.Timezone(), config.DataDir(), chatLocker)
+	sched, err := scheduler.New(database, config.Timezone(), config.DataDir(), chatLocker)
 	if err != nil {
 		log.Fatal("scheduler: ", err)
 	}
@@ -110,17 +110,6 @@ func newSendDocFunc(b *bot.Bot) sendfile.SendDocFunc {
 			MessageThreadID: threadID,
 			Document:        &models.InputFileUpload{Filename: filename, Data: bytes.NewReader(data)},
 			Caption:         caption,
-		})
-		return err
-	}
-}
-
-func newSendFunc(b *bot.Bot) scheduler.SendFunc {
-	return func(ctx context.Context, chatID int64, threadID int, text string) error {
-		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:          chatID,
-			MessageThreadID: threadID,
-			Text:            text,
 		})
 		return err
 	}

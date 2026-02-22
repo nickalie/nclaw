@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -23,8 +22,7 @@ func setupTestScheduler(t *testing.T) *Scheduler {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(&model.ScheduledTask{}, &model.TaskRunLog{}))
 
-	noopSend := func(_ context.Context, _ int64, _ int, _ string) error { return nil }
-	sched, err := New(database, noopSend, "UTC", t.TempDir(), telegram.NewChatLocker())
+	sched, err := New(database, "UTC", t.TempDir(), telegram.NewChatLocker())
 	require.NoError(t, err)
 	return sched
 }
