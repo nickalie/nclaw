@@ -151,24 +151,24 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 }
 
 func (m *Manager) processIncoming(wh *model.WebhookRegistration, req IncomingRequest) {
-	reply := m.callClaude(wh, req)
+	result := m.callClaude(wh, req)
 
-	reply = webhookBlockRe.ReplaceAllString(reply, "")
-	reply = scheduler.StripBlocks(reply)
+	// Strip all command blocks from display text.
+	text := StripBlocksClean(result.Text)
+	text = scheduler.StripBlocks(text)
+	text = sendfile.StripBlocks(text)
+
+	if text == "" {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	reply = sendfile.StripBlocks(reply)
-
-	if reply == "" {
-		return
-	}
-
-	m.sendReply(ctx, wh.ChatID, wh.ThreadID, reply)
+	m.sendReply(ctx, wh.ChatID, wh.ThreadID, text)
 }
 
-func (m *Manager) callClaude(webhook *model.WebhookRegistration, req IncomingRequest) string {
+func (m *Manager) callClaude(webhook *model.WebhookRegistration, req IncomingRequest) *claude.Result {
 	unlock := m.chatLocker.Lock(webhook.ChatID, webhook.ThreadID)
 	defer unlock()
 
@@ -177,22 +177,22 @@ func (m *Manager) callClaude(webhook *model.WebhookRegistration, req IncomingReq
 	dir := telegram.ChatDir(m.dataDir, webhook.ChatID, webhook.ThreadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("webhook: mkdir %s: %v", dir, err)
-		return ""
+		return &claude.Result{}
 	}
 
 	if err := claude.EnsureValidToken(); err != nil {
 		log.Printf("webhook: token refresh warning: %v", err)
 	}
 
-	reply, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(telegram.Prompt).Continue(prompt)
+	result, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(telegram.Prompt).Continue(prompt)
 	if err != nil {
 		log.Printf("webhook: claude error for %s: %v", webhook.ID, err)
-		if reply == "" {
-			return "Webhook processing failed"
+		if result.Text == "" {
+			return &claude.Result{Text: "Webhook processing failed", FullText: "Webhook processing failed"}
 		}
 	}
 
-	return reply
+	return result
 }
 
 func (m *Manager) sendReply(ctx context.Context, chatID int64, threadID int, text string) {

@@ -52,35 +52,21 @@ func TestScheduleBlockRegex_NoMatch(t *testing.T) {
 	assert.Empty(t, matches)
 }
 
-func TestProcessReply_NoBlocks(t *testing.T) {
-	s := setupTestScheduler(t)
-	result := s.ProcessReply("plain reply", 100, 0)
-	assert.Equal(t, "plain reply", result)
-}
-
-func TestProcessReply_StripBlock(t *testing.T) {
-	s := setupTestScheduler(t)
-	reply := "before\n```nclaw:schedule\n{\"action\":\"cancel\",\"task_id\":\"nonexistent\"}\n```\nafter"
-	result := s.ProcessReply(reply, 100, 0)
-	// Block should be stripped, error appended
-	assert.NotContains(t, result, "```nclaw:schedule")
-	assert.Contains(t, result, "before")
-	assert.Contains(t, result, "after")
-}
-
-func TestProcessReply_CreateTask(t *testing.T) {
+func TestExecuteBlocks_CreateTask(t *testing.T) {
 	s := setupTestScheduler(t)
 	s.Start()
 	defer s.Shutdown()
 
-	reply := "I'll set that up.\n```nclaw:schedule\n" +
+	text := "I'll set that up.\n```nclaw:schedule\n" +
 		`{"action":"create","prompt":"check weather","type":"interval","value":"1h"}` +
 		"\n```\nDone!"
-	result := s.ProcessReply(reply, 100, 5)
+	errMsg := s.ExecuteBlocks(text, 100, 5)
+	assert.Empty(t, errMsg)
 
-	assert.Contains(t, result, "I'll set that up.")
-	assert.Contains(t, result, "Done!")
-	assert.NotContains(t, result, "nclaw:schedule")
+	display := StripBlocks(text)
+	assert.Contains(t, display, "I'll set that up.")
+	assert.Contains(t, display, "Done!")
+	assert.NotContains(t, display, "nclaw:schedule")
 
 	// Verify task was actually created in DB
 	var tasks []model.ScheduledTask
@@ -93,57 +79,115 @@ func TestProcessReply_CreateTask(t *testing.T) {
 	assert.Equal(t, 5, tasks[0].ThreadID)
 }
 
-func TestProcessReply_CreateTaskMissingFields(t *testing.T) {
+func TestExecuteBlocks_CreateTaskMissingFields(t *testing.T) {
 	s := setupTestScheduler(t)
-	reply := "```nclaw:schedule\n{\"action\":\"create\",\"prompt\":\"\"}\n```"
-	result := s.ProcessReply(reply, 100, 0)
+	text := "```nclaw:schedule\n{\"action\":\"create\",\"prompt\":\"\"}\n```"
+	result := s.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "Schedule error")
 }
 
-func TestProcessReply_InvalidJSON(t *testing.T) {
+func TestExecuteBlocks_InvalidJSON(t *testing.T) {
 	s := setupTestScheduler(t)
-	reply := "```nclaw:schedule\n{invalid json}\n```"
-	result := s.ProcessReply(reply, 100, 0)
+	text := "```nclaw:schedule\n{invalid json}\n```"
+	result := s.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "Schedule error")
 }
 
-func TestProcessReply_UnknownAction(t *testing.T) {
+func TestExecuteBlocks_UnknownAction(t *testing.T) {
 	s := setupTestScheduler(t)
-	reply := "```nclaw:schedule\n{\"action\":\"explode\"}\n```"
-	result := s.ProcessReply(reply, 100, 0)
+	text := "```nclaw:schedule\n{\"action\":\"explode\"}\n```"
+	result := s.ExecuteBlocks(text, 100, 0)
 	assert.Contains(t, result, "Schedule error")
 	assert.Contains(t, result, "unknown action")
 }
 
-func TestProcessReply_CreateWithContextMode(t *testing.T) {
+func TestExecuteBlocks_CreateWithContextMode(t *testing.T) {
 	s := setupTestScheduler(t)
 	s.Start()
 	defer s.Shutdown()
 
-	reply := "```nclaw:schedule\n" +
+	text := "```nclaw:schedule\n" +
 		`{"action":"create","prompt":"check","type":"interval","value":"30m","context":"isolated"}` +
 		"\n```"
-	result := s.ProcessReply(reply, 200, 0)
-	assert.NotContains(t, result, "Schedule error")
+	result := s.ExecuteBlocks(text, 200, 0)
+	assert.Empty(t, result)
 
 	var tasks []model.ScheduledTask
 	require.NoError(t, s.db.Find(&tasks).Error)
 	assert.Equal(t, model.ContextIsolated, tasks[0].ContextMode)
 }
 
-func TestProcessReply_DefaultContextMode(t *testing.T) {
+func TestExecuteBlocks_DefaultContextMode(t *testing.T) {
 	s := setupTestScheduler(t)
 	s.Start()
 	defer s.Shutdown()
 
-	reply := "```nclaw:schedule\n" +
+	text := "```nclaw:schedule\n" +
 		`{"action":"create","prompt":"check","type":"interval","value":"1h"}` +
 		"\n```"
-	s.ProcessReply(reply, 200, 0)
+	s.ExecuteBlocks(text, 200, 0)
 
 	var tasks []model.ScheduledTask
 	require.NoError(t, s.db.Find(&tasks).Error)
 	assert.Equal(t, model.ContextGroup, tasks[0].ContextMode)
+}
+
+func TestExecuteBlocks_NoBlocks(t *testing.T) {
+	s := setupTestScheduler(t)
+	result := s.ExecuteBlocks("plain text", 100, 0)
+	assert.Empty(t, result)
+}
+
+func TestExecuteBlocks_Success(t *testing.T) {
+	s := setupTestScheduler(t)
+	s.Start()
+	defer s.Shutdown()
+
+	text := "text\n```nclaw:schedule\n" +
+		`{"action":"create","prompt":"check weather","type":"interval","value":"1h"}` +
+		"\n```\nmore"
+	result := s.ExecuteBlocks(text, 100, 0)
+	assert.Empty(t, result)
+
+	var tasks []model.ScheduledTask
+	require.NoError(t, s.db.Find(&tasks).Error)
+	assert.Len(t, tasks, 1)
+	assert.Equal(t, "check weather", tasks[0].Prompt)
+}
+
+func TestExecuteBlocks_Error(t *testing.T) {
+	s := setupTestScheduler(t)
+	text := "```nclaw:schedule\n{invalid json}\n```"
+	result := s.ExecuteBlocks(text, 100, 0)
+	assert.Contains(t, result, "[Schedule error:")
+}
+
+func TestExecuteBlocks_MixedSuccessAndError(t *testing.T) {
+	s := setupTestScheduler(t)
+	s.Start()
+	defer s.Shutdown()
+
+	text := "```nclaw:schedule\n" +
+		`{"action":"create","prompt":"ok","type":"interval","value":"1h"}` +
+		"\n```\n```nclaw:schedule\n{bad}\n```"
+	result := s.ExecuteBlocks(text, 100, 0)
+	assert.Contains(t, result, "[Schedule error:")
+
+	var tasks []model.ScheduledTask
+	require.NoError(t, s.db.Find(&tasks).Error)
+	assert.Len(t, tasks, 1)
+}
+
+func TestStripBlocks(t *testing.T) {
+	text := "before\n```nclaw:schedule\n{\"action\":\"create\"}\n```\nafter"
+	result := StripBlocks(text)
+	assert.NotContains(t, result, "nclaw:schedule")
+	assert.Contains(t, result, "before")
+	assert.Contains(t, result, "after")
+}
+
+func TestStripBlocks_NoBlocks(t *testing.T) {
+	assert.Equal(t, "hello", StripBlocks("hello"))
 }
 
 func TestTruncate(t *testing.T) {

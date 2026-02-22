@@ -26,20 +26,27 @@ Telegram -> Handler -> Claude Code CLI (via go-binwrapper) -> Telegram
 ## Key Patterns
 
 ### Claude CLI Integration
-The `claude` package wraps the CLI binary with a fluent builder. The handler calls `claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(prompt).Continue(query)` to continue the session in a per-chat directory.
+The `claude` package wraps the CLI binary with a fluent builder. The handler calls `claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(prompt).Continue(query)` to continue the session in a per-chat directory. `Ask()`, `Continue()`, and `Resume()` use `--output-format stream-json` and return a `*Result` with two fields:
+- `Text` — the final assistant message (from the stream-json `result` event), used for display.
+- `FullText` — all assistant messages concatenated, used for scanning command blocks that may appear in intermediate messages during multi-turn execution.
 
 ### OAuth Token Refresh
 Before each CLI invocation (in handler and scheduler), `claude.EnsureValidToken()` proactively refreshes the OAuth token if it expires within 5 minutes. Credentials are read from `~/.claude/.credentials.json` using field-preserving JSON round-tripping. Refresh failures are logged as warnings and do not block the CLI call.
 
+### Command Block Processing
+Claude's replies can contain command blocks (`nclaw:sendfile`, `nclaw:schedule`, `nclaw:webhook`). Processing follows a two-phase pattern:
+1. **Execute** — `ExecuteBlocks()` scans `Result.FullText` (all assistant messages) and executes embedded commands. This ensures blocks in intermediate messages during multi-turn execution are not missed.
+2. **Strip** — `StripBlocks()` removes block syntax from `Result.Text` (the final message) before displaying to the user.
+
 ### Scheduled Tasks
-Claude's replies are scanned for `nclaw:schedule` code blocks containing JSON commands (`create`, `pause`, `resume`, `cancel`). Tasks support cron, interval, and one-time schedules. Tasks persist in SQLite and reload on startup.
+All assistant messages from a Claude execution are scanned for `nclaw:schedule` code blocks containing JSON commands (`create`, `pause`, `resume`, `cancel`). Tasks support cron, interval, and one-time schedules. Tasks persist in SQLite and reload on startup.
 
 ### Webhooks
-Claude's replies are scanned for `nclaw:webhook` code blocks containing JSON commands (`create`, `delete`, `list`). Webhooks register HTTP endpoints at `https://{BASE_DOMAIN}/webhooks/{UUID}`. When an external service calls a webhook URL, the request (method, headers, query params, body) is forwarded to Claude in the originating chat via `Continue()`. The HTTP server returns 200 immediately; Claude processing happens asynchronously in a goroutine. Webhooks persist in SQLite alongside scheduled tasks.
+All assistant messages from a Claude execution are scanned for `nclaw:webhook` code blocks containing JSON commands (`create`, `delete`, `list`). Webhooks register HTTP endpoints at `https://{BASE_DOMAIN}/webhooks/{UUID}`. When an external service calls a webhook URL, the request (method, headers, query params, body) is forwarded to Claude in the originating chat via `Continue()`. The HTTP server returns 200 immediately; Claude processing happens asynchronously in a goroutine. Webhooks persist in SQLite alongside scheduled tasks.
 
 ### File Handling
 - **Inbound**: Attachments (documents, photos, audio, video, stickers) are downloaded to the chat directory and referenced in prompts. Files are cached by unique ID and size.
-- **Outbound**: Claude's replies are scanned for `nclaw:sendfile` code blocks via the shared `sendfile` package (used by handler, scheduler, and webhook). Matched files are sent as Telegram documents. File paths must resolve to within the chat directory or the OS temp directory; paths outside these locations are rejected.
+- **Outbound**: All assistant messages from a Claude execution are scanned for `nclaw:sendfile` code blocks via the shared `sendfile` package (used by handler and scheduler). Matched files are sent as Telegram documents. File paths must resolve to within the chat directory or the OS temp directory; paths outside these locations are rejected.
 
 ### Message Formatting
 Replies use Telegram HTML formatting with plain-text fallback. Long messages are split at newline boundaries (max 4096 chars per message).
