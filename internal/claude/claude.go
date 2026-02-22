@@ -181,6 +181,7 @@ func (c *Claude) Env(vars []string) *Claude {
 // Uses stream-json output to capture all assistant messages across multi-turn execution.
 func (c *Claude) Ask(query string) (*Result, error) {
 	c.outputFormat = formatStreamJSON
+	c.verbose = true
 	c.prepare("-p")
 	return c.runAndParse(query)
 }
@@ -189,6 +190,7 @@ func (c *Claude) Ask(query string) (*Result, error) {
 // Uses stream-json output to capture all assistant messages across multi-turn execution.
 func (c *Claude) Continue(query string) (*Result, error) {
 	c.outputFormat = formatStreamJSON
+	c.verbose = true
 	c.prepare("-c", "-p")
 	return c.runAndParse(query)
 }
@@ -197,6 +199,7 @@ func (c *Claude) Continue(query string) (*Result, error) {
 // Uses stream-json output to capture all assistant messages across multi-turn execution.
 func (c *Claude) Resume(session, query string) (*Result, error) {
 	c.outputFormat = formatStreamJSON
+	c.verbose = true
 	c.prepare("-r", session, "-p")
 	return c.runAndParse(query)
 }
