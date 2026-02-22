@@ -29,7 +29,7 @@ func setupTestServer(t *testing.T) (*Server, *Manager) {
 
 	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
 	mgr := NewManager(database, "example.com", t.TempDir(), telegram.NewChatLocker())
-	mgr.SetPipeline(pipeline.New(send, nil, true))
+	mgr.SetPipeline(pipeline.New(send, nil, nil, true))
 	srv := NewServer(mgr)
 	return srv, mgr
 }

@@ -27,7 +27,7 @@ func setupTestManager(t *testing.T) *Manager {
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
 	mgr := NewManager(database, "example.com", t.TempDir(), telegram.NewChatLocker())
-	mgr.SetPipeline(pipeline.New(noopSend, nil, true))
+	mgr.SetPipeline(pipeline.New(noopSend, nil, nil, true))
 	return mgr
 }
 
