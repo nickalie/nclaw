@@ -31,8 +31,7 @@ var (
 // stripping, status appending, file sending, and reply delivery.
 type Pipeline struct {
 	executors          []BlockExecutor
-	sendDoc            sendfile.SendDocFunc
-	sendMediaGroup     sendfile.SendMediaGroupFunc
+	senders            sendfile.Senders
 	send               SendFunc
 	webhooksConfigured bool
 }
@@ -41,7 +40,7 @@ type Pipeline struct {
 // webhooksConfigured indicates whether a webhook executor is present, used to
 // warn users when webhook blocks appear but webhooks are not enabled.
 func New(
-	send SendFunc, sendDoc sendfile.SendDocFunc, sendMediaGroup sendfile.SendMediaGroupFunc,
+	send SendFunc, senders sendfile.Senders,
 	webhooksConfigured bool, executors ...BlockExecutor,
 ) *Pipeline {
 	var filtered []BlockExecutor
@@ -52,8 +51,7 @@ func New(
 	}
 	return &Pipeline{
 		executors:          filtered,
-		sendDoc:            sendDoc,
-		sendMediaGroup:     sendMediaGroup,
+		senders:            senders,
 		send:               send,
 		webhooksConfigured: webhooksConfigured,
 	}
@@ -77,7 +75,7 @@ func (p *Pipeline) Process(
 				statusMsgs = append(statusMsgs, msg)
 			}
 		}
-		sendfile.ExecuteBlocks(ctx, p.sendDoc, p.sendMediaGroup, result.FullText, chatID, threadID, dir)
+		sendfile.ExecuteBlocks(ctx, p.senders, result.FullText, chatID, threadID, dir)
 	}
 
 	// Phase 2: Strip all command block syntax from display text.
