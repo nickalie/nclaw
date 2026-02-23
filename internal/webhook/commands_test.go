@@ -13,6 +13,7 @@ import (
 
 	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/pipeline"
+	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
 
@@ -27,7 +28,7 @@ func setupTestManager(t *testing.T) *Manager {
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
 	mgr := NewManager(database, "example.com", t.TempDir(), telegram.NewChatLocker())
-	mgr.SetPipeline(pipeline.New(noopSend, nil, nil, true))
+	mgr.SetPipeline(pipeline.New(noopSend, sendfile.Senders{}, true))
 	return mgr
 }
 

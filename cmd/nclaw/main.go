@@ -47,7 +47,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sendDoc := newSendDocFunc(b)
+	fileSenders := sendfile.Senders{
+		Doc:   newSendDocFunc(b),
+		Audio: newSendAudioFunc(b),
+	}
 	sched, err := scheduler.New(database, config.Timezone(), config.DataDir(), chatLocker)
 	if err != nil {
 		log.Fatal("scheduler: ", err)
@@ -62,8 +65,8 @@ func main() {
 	if webhookMgr != nil {
 		executors = append(executors, webhookMgr)
 	}
-	sendMediaGroup := newSendMediaGroupFunc(b)
-	p := pipeline.New(newPipelineSendFunc(b), sendDoc, sendMediaGroup, webhookMgr != nil, executors...)
+	fileSenders.MediaGroup = newSendMediaGroupFunc(b)
+	p := pipeline.New(newPipelineSendFunc(b), fileSenders, webhookMgr != nil, executors...)
 	h.Pipeline = p
 	sched.SetPipeline(p)
 	if webhookMgr != nil {
@@ -121,15 +124,23 @@ func newSendDocFunc(b *bot.Bot) sendfile.SendDocFunc {
 	}
 }
 
+func newSendAudioFunc(b *bot.Bot) sendfile.SendAudioFunc {
+	return func(ctx context.Context, chatID int64, threadID int, filename string, data []byte, caption string) error {
+		_, err := b.SendAudio(ctx, &bot.SendAudioParams{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			Audio:           &models.InputFileUpload{Filename: filename, Data: bytes.NewReader(data)},
+			Caption:         caption,
+		})
+		return err
+	}
+}
+
 func newSendMediaGroupFunc(b *bot.Bot) sendfile.SendMediaGroupFunc {
 	return func(ctx context.Context, chatID int64, threadID int, files []sendfile.File) error {
 		media := make([]models.InputMedia, len(files))
 		for i, f := range files {
-			media[i] = &models.InputMediaDocument{
-				Media:           "attach://" + f.Filename,
-				Caption:         f.Caption,
-				MediaAttachment: bytes.NewReader(f.Data),
-			}
+			media[i] = buildInputMedia(f)
 		}
 		_, err := b.SendMediaGroup(ctx, &bot.SendMediaGroupParams{
 			ChatID:          chatID,
@@ -137,6 +148,29 @@ func newSendMediaGroupFunc(b *bot.Bot) sendfile.SendMediaGroupFunc {
 			Media:           media,
 		})
 		return err
+	}
+}
+
+func buildInputMedia(f sendfile.File) models.InputMedia {
+	attach := "attach://" + f.Filename
+	reader := bytes.NewReader(f.Data)
+	switch f.MediaType {
+	case sendfile.MediaAudio:
+		return &models.InputMediaAudio{
+			Media: attach, Caption: f.Caption, MediaAttachment: reader,
+		}
+	case sendfile.MediaPhoto:
+		return &models.InputMediaPhoto{
+			Media: attach, Caption: f.Caption, MediaAttachment: reader,
+		}
+	case sendfile.MediaVideo:
+		return &models.InputMediaVideo{
+			Media: attach, Caption: f.Caption, MediaAttachment: reader,
+		}
+	default:
+		return &models.InputMediaDocument{
+			Media: attach, Caption: f.Caption, MediaAttachment: reader,
+		}
 	}
 }
 

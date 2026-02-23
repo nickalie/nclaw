@@ -16,6 +16,7 @@ import (
 
 	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/pipeline"
+	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
 
@@ -29,7 +30,7 @@ func setupTestServer(t *testing.T) (*Server, *Manager) {
 
 	send := func(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
 	mgr := NewManager(database, "example.com", t.TempDir(), telegram.NewChatLocker())
-	mgr.SetPipeline(pipeline.New(send, nil, nil, true))
+	mgr.SetPipeline(pipeline.New(send, sendfile.Senders{}, true))
 	srv := NewServer(mgr)
 	return srv, mgr
 }

@@ -10,15 +10,29 @@ import (
 	"strings"
 )
 
+// MediaType indicates how a file should be sent via Telegram.
+type MediaType int
+
+const (
+	MediaDocument MediaType = iota
+	MediaAudio
+	MediaPhoto
+	MediaVideo
+)
+
 // SendDocFunc sends a single document to a Telegram chat/thread.
 type SendDocFunc func(ctx context.Context, chatID int64, threadID int, filename string, data []byte, caption string) error
 
 // File holds resolved file data ready to send.
 type File struct {
-	Filename string
-	Data     []byte
-	Caption  string
+	Filename  string
+	Data      []byte
+	Caption   string
+	MediaType MediaType
 }
+
+// SendAudioFunc sends a single audio file to a Telegram chat/thread.
+type SendAudioFunc func(ctx context.Context, chatID int64, threadID int, filename string, data []byte, caption string) error
 
 // SendMediaGroupFunc sends a group of files as a single Telegram media group.
 type SendMediaGroupFunc func(ctx context.Context, chatID int64, threadID int, files []File) error
@@ -37,11 +51,18 @@ func StripBlocks(text string) string {
 	return strings.TrimSpace(blockRe.ReplaceAllString(text, ""))
 }
 
+// Senders groups all Telegram send callbacks used by ExecuteBlocks.
+type Senders struct {
+	Doc        SendDocFunc
+	Audio      SendAudioFunc
+	MediaGroup SendMediaGroupFunc
+}
+
 // ExecuteBlocks extracts nclaw:sendfile blocks from text and sends the files.
 // When sendMediaGroup is provided and there are 2+ files, files are grouped into media groups.
 // Does not modify the input text.
 func ExecuteBlocks(
-	ctx context.Context, sendDoc SendDocFunc, sendMediaGroup SendMediaGroupFunc,
+	ctx context.Context, senders Senders,
 	text string, chatID int64, threadID int, dir string,
 ) {
 	matches := blockRe.FindAllStringSubmatch(text, -1)
@@ -61,12 +82,12 @@ func ExecuteBlocks(
 		return
 	}
 
-	if len(files) == 1 || sendMediaGroup == nil {
-		sendFilesIndividually(ctx, sendDoc, files, chatID, threadID)
+	if len(files) == 1 || senders.MediaGroup == nil {
+		sendFilesIndividually(ctx, senders, files, chatID, threadID)
 		return
 	}
 
-	sendFilesAsGroups(ctx, sendMediaGroup, files, chatID, threadID)
+	sendFilesAsGroups(ctx, senders.MediaGroup, files, chatID, threadID)
 }
 
 func resolveFile(jsonStr, dir string) (File, bool) {
@@ -98,17 +119,41 @@ func resolveFile(jsonStr, dir string) (File, bool) {
 	}
 
 	log.Printf("sendfile: resolved %s (%d bytes)", cmd.Path, len(data))
-	return File{Filename: filepath.Base(cmd.Path), Data: data, Caption: cmd.Caption}, true
+	return File{
+		Filename:  filepath.Base(cmd.Path),
+		Data:      data,
+		Caption:   cmd.Caption,
+		MediaType: mediaTypeFromExt(filepath.Ext(cmd.Path)),
+	}, true
 }
 
-func sendFilesIndividually(ctx context.Context, sendDoc SendDocFunc, files []File, chatID int64, threadID int) {
-	if sendDoc == nil {
-		log.Printf("sendfile: sendDoc callback is nil, skipping")
-		return
+func mediaTypeFromExt(ext string) MediaType {
+	switch strings.ToLower(ext) {
+	case ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".wav", ".opus":
+		return MediaAudio
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":
+		return MediaPhoto
+	case ".mp4", ".avi", ".mov", ".mkv", ".webm":
+		return MediaVideo
+	default:
+		return MediaDocument
 	}
+}
+
+func sendFilesIndividually(ctx context.Context, senders Senders, files []File, chatID int64, threadID int) {
 	for _, f := range files {
-		log.Printf("sendfile: sending %s (%d bytes) to chat=%d thread=%d", f.Filename, len(f.Data), chatID, threadID)
-		if err := sendDoc(ctx, chatID, threadID, f.Filename, f.Data, f.Caption); err != nil {
+		log.Printf("sendfile: sending %s (%d bytes, type=%d) to chat=%d thread=%d",
+			f.Filename, len(f.Data), f.MediaType, chatID, threadID)
+		var err error
+		if f.MediaType == MediaAudio && senders.Audio != nil {
+			err = senders.Audio(ctx, chatID, threadID, f.Filename, f.Data, f.Caption)
+		} else if senders.Doc != nil {
+			err = senders.Doc(ctx, chatID, threadID, f.Filename, f.Data, f.Caption)
+		} else {
+			log.Printf("sendfile: no send callback available, skipping %s", f.Filename)
+			continue
+		}
+		if err != nil {
 			log.Printf("sendfile: send error: %v", err)
 		}
 	}
