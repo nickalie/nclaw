@@ -71,6 +71,8 @@ nfpms:
     formats:
       - deb
       - rpm
+      - apk
+      - archlinux
 
 scoops:
   - repository:
