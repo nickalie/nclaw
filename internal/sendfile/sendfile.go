@@ -13,6 +13,7 @@ import (
 // MediaType indicates how a file should be sent via Telegram.
 type MediaType int
 
+// Supported media types for Telegram file sending.
 const (
 	MediaDocument MediaType = iota
 	MediaAudio
