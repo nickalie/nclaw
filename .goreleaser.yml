@@ -74,6 +74,16 @@ nfpms:
       - apk
       - archlinux
 
+aurs:
+  - name: nclaw-bin
+    homepage: https://github.com/nickalie/nclaw
+    description: Telegram bot wrapping Claude Code CLI
+    license: MIT
+    maintainers:
+      - nickalie
+    private_key: "{{ .Env.AUR_SSH_KEY }}"
+    git_url: "ssh://aur@aur.archlinux.org/nclaw-bin.git"
+
 scoops:
   - repository:
       owner: nickalie
