@@ -57,3 +57,17 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
+
+nfpms:
+  - id: nclaw
+    package_name: nclaw
+    builds:
+      - nclaw
+    vendor: nickalie
+    homepage: https://github.com/nickalie/nclaw
+    maintainer: nickalie
+    description: Telegram bot wrapping Claude Code CLI
+    license: MIT
+    formats:
+      - deb
+      - rpm
