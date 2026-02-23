@@ -76,6 +76,7 @@ scoops:
   - repository:
       owner: nickalie
       name: scoop-bucket
+      token: "{{ .Env.SCOOP_GITHUB_TOKEN }}"
     homepage: https://github.com/nickalie/nclaw
     description: Telegram bot wrapping Claude Code CLI
     license: MIT
@@ -90,3 +91,4 @@ winget:
       owner: nickalie
       name: winget-pkgs
       branch: nclaw-{{.Version}}
+      token: "{{ .Env.WINGET_GITHUB_TOKEN }}"
