@@ -345,10 +345,10 @@ func TestChatDir_WithThread(t *testing.T) {
 
 func TestHandleIncoming_ActiveWebhook(t *testing.T) {
 	m := setupTestManager(t)
+	defer m.Wait()
 	wh, err := m.Create("active hook", 100, 0)
 	require.NoError(t, err)
 
-	// HandleIncoming should succeed for active webhook (spawns goroutine but we don't wait for it).
 	err = m.HandleIncoming(wh.ID, IncomingRequest{Method: "POST", Body: "test"})
 	assert.NoError(t, err)
 }
