@@ -80,18 +80,6 @@ scoops:
     description: Telegram bot wrapping Claude Code CLI
     license: MIT
 
-chocolateys:
-  - owners: nickalie
-    authors: nickalie
-    project_url: https://github.com/nickalie/nclaw
-    url_template: "https://github.com/nickalie/nclaw/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
-    copyright: 2026 nickalie
-    description: Telegram bot wrapping Claude Code CLI
-    license_url: https://github.com/nickalie/nclaw/blob/main/LICENSE
-    project_source_url: https://github.com/nickalie/nclaw
-    api_key: "{{ .Env.CHOCOLATEY_API_KEY }}"
-    skip_publish: true
-
 winget:
   - publisher: nickalie
     short_description: Telegram bot wrapping Claude Code CLI
