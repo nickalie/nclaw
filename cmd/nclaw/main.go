@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"time"
@@ -42,6 +43,7 @@ func main() {
 
 	b, err := bot.New(config.TelegramBotToken(),
 		bot.WithDefaultHandler(h.Default),
+		bot.WithHTTPClient(time.Minute, &http.Client{Timeout: 5 * time.Minute}),
 	)
 	if err != nil {
 		log.Fatal(err)
