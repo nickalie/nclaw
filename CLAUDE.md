@@ -62,10 +62,10 @@ Replies use Telegram HTML formatting with plain-text fallback. Long messages are
 
 Required env vars (prefix `NCLAW_`):
 - `NCLAW_TELEGRAM_BOT_TOKEN` - Telegram bot token
-- `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` - Comma-separated list of allowed Telegram chat IDs
 - `NCLAW_DATA_DIR` - Base directory for session data and files
 
 Optional:
+- `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` - Comma-separated list of allowed Telegram chat IDs (if unset, bot accepts all chats with a security warning)
 - `NCLAW_DB_PATH` - SQLite path (default: `{data_dir}/nclaw.db`)
 - `NCLAW_TIMEZONE` - Timezone for scheduler (default: system local)
 - `NCLAW_WEBHOOK_BASE_DOMAIN` - Base domain for webhook URLs (required when webhooks enabled)

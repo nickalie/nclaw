@@ -60,7 +60,6 @@ func TestInit_MissingRequired(t *testing.T) {
 func TestInit_AllRequired(t *testing.T) {
 	viper.Reset()
 	viper.Set("telegram.bot_token", "token")
-	viper.Set("telegram.whitelist_chat_ids", "123")
 	viper.Set("data_dir", "/tmp/test")
 	defer viper.Reset()
 

@@ -84,6 +84,15 @@ aurs:
     private_key: "{{ .Env.AUR_SSH_KEY }}"
     git_url: "ssh://aur@aur.archlinux.org/nclaw-bin.git"
 
+brews:
+  - repository:
+      owner: nickalie
+      name: homebrew-apps
+      token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}"
+    homepage: https://github.com/nickalie/nclaw
+    description: Telegram bot wrapping Claude Code CLI
+    license: MIT
+
 scoops:
   - repository:
       owner: nickalie
@@ -92,6 +101,18 @@ scoops:
     homepage: https://github.com/nickalie/nclaw
     description: Telegram bot wrapping Claude Code CLI
     license: MIT
+
+chocolateys:
+  - name: nclaw
+    owners: nickalie
+    authors: nickalie
+    project_url: https://github.com/nickalie/nclaw
+    license_url: https://github.com/nickalie/nclaw/blob/main/LICENSE
+    project_source_url: https://github.com/nickalie/nclaw
+    bug_tracker_url: https://github.com/nickalie/nclaw/issues
+    description: Telegram bot wrapping Claude Code CLI
+    release_notes: "https://github.com/nickalie/nclaw/releases/tag/v{{ .Version }}"
+    api_key: "{{ .Env.CHOCOLATEY_API_KEY }}"
 
 winget:
   - publisher: nickalie

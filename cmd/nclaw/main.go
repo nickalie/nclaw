@@ -28,6 +28,7 @@ func main() {
 	if err := config.Init(); err != nil {
 		log.Fatal(err)
 	}
+	config.LogSecurityWarnings()
 
 	database, err := db.Open(config.DBPath())
 	if err != nil {
