@@ -7,18 +7,11 @@
 - [Why NClaw](#why-nclaw)
 - [How It Works](#how-it-works)
 - [Features](#features)
-- [Installation](#installation)
-  - [Homebrew (macOS/Linux)](#homebrew-macoslinux)
-  - [Scoop (Windows)](#scoop-windows)
-  - [Chocolatey (Windows)](#chocolatey-windows)
-  - [Winget (Windows)](#winget-windows)
-  - [AUR (Arch Linux)](#aur-arch-linux)
-  - [DEB / RPM / APK](#deb--rpm--apk)
-  - [Binary download](#binary-download)
-  - [Go install](#go-install)
-  - [Docker](#docker)
-  - [Kubernetes (Helm)](#kubernetes-helm)
+- [Docker](#docker)
+- [Kubernetes (Helm)](#kubernetes-helm)
 - [Running without Docker](#running-without-docker)
+  - [Installation](#installation)
+  - [Usage](#usage)
 - [Configuration](#configuration)
   - [Environment variables](#environment-variables)
   - [Config file](#config-file)
@@ -64,67 +57,7 @@ The recommended way to run NClaw is inside Docker — the container serves as a 
 - **Rich runtime** — Docker image includes git, gh CLI, Chromium, Go, Node.js, Python/uv. The assistant can install additional packages on the fly as needed — for example, `apk add ffmpeg` to process video, `npm install -g prettier` to format code, or `pip install pandas` to analyze data.
 - **HTML-formatted replies** — Responses render using Telegram's HTML formatting with plain-text fallback.
 
-## Installation
-
-### Homebrew (macOS/Linux)
-
-```bash
-brew install nickalie/apps/nclaw
-```
-
-### Scoop (Windows)
-
-```powershell
-scoop bucket add nickalie https://github.com/nickalie/scoop-bucket
-scoop install nclaw
-```
-
-### Chocolatey (Windows)
-
-```powershell
-choco install nclaw
-```
-
-### Winget (Windows)
-
-```powershell
-winget install nickalie.nclaw
-```
-
-### AUR (Arch Linux)
-
-```bash
-yay -S nclaw-bin
-```
-
-### DEB / RPM / APK
-
-Download the appropriate package from the [Releases](https://github.com/nickalie/nclaw/releases) page:
-
-```bash
-# Debian/Ubuntu
-sudo dpkg -i nclaw_*.deb
-
-# Fedora/RHEL
-sudo rpm -i nclaw_*.rpm
-
-# Alpine
-sudo apk add --allow-untrusted nclaw_*.apk
-```
-
-### Binary download
-
-Pre-built binaries for Linux, macOS, and Windows (amd64/arm64) are available on the [Releases](https://github.com/nickalie/nclaw/releases) page.
-
-### Go install
-
-```bash
-CGO_ENABLED=1 go install github.com/nickalie/nclaw/cmd/nclaw@latest
-```
-
-Requires Go 1.25+ and a C compiler (CGO is needed for SQLite).
-
-### Docker
+## Docker
 
 ```bash
 docker run -d --name nclaw \
@@ -136,9 +69,24 @@ docker run -d --name nclaw \
   ghcr.io/nickalie/nclaw:latest
 ```
 
+To enable [webhooks](#webhooks), add the webhook base domain and expose the port:
+
+```bash
+docker run -d --name nclaw \
+  -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
+  -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+  -e NCLAW_DATA_DIR=/app/data \
+  -e NCLAW_WEBHOOK_BASE_DOMAIN=example.com \
+  -e NCLAW_WEBHOOK_PORT=:3000 \
+  -p 3000:3000 \
+  -v ./data:/app/data \
+  -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
+  ghcr.io/nickalie/nclaw:latest
+```
+
 The Docker image is based on `node:24-alpine` and includes Claude Code, git, gh CLI, Chromium, Go, Node.js, and Python/uv. The assistant can install any additional packages at runtime as the task requires (e.g. `apk add ffmpeg`, `pip install pandas`, `npm install -g typescript`).
 
-### Kubernetes (Helm)
+## Kubernetes (Helm)
 
 The Helm chart is published as an OCI artifact to GHCR.
 
@@ -156,7 +104,7 @@ kubectl create secret generic my-claude-secret \
   --from-file=credentials.json=$HOME/.claude/.credentials.json
 ```
 
-#### Helm values
+### Helm values
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -184,28 +132,89 @@ kubectl create secret generic my-claude-secret \
 
 ## Running without Docker
 
-Even though NClaw is container-first, it's a regular executable that runs on any machine. The only runtime dependency is [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) — it must be installed and available in `PATH`.
+NClaw is a regular executable and can run directly on any machine. The only runtime dependency is [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) — it must be installed and available in `PATH`.
 
-1. Install NClaw using any [method above](#installation).
-2. Install Claude Code CLI and authenticate:
+> **Security notice:** Without Docker, Claude Code runs directly on the host with the same permissions as the nclaw process. It has full access to the file system, network, and any credentials available to the user. Run under a dedicated unprivileged user and avoid running as root. For production use, Docker or Kubernetes deployment is strongly recommended.
+
+### Installation
+
+#### Homebrew (macOS/Linux)
+
+```bash
+brew install nickalie/apps/nclaw
+```
+
+#### Scoop (Windows)
+
+```powershell
+scoop bucket add nickalie https://github.com/nickalie/scoop-bucket
+scoop install nclaw
+```
+
+#### Chocolatey (Windows)
+
+```powershell
+choco install nclaw
+```
+
+#### Winget (Windows)
+
+```powershell
+winget install nickalie.nclaw
+```
+
+#### AUR (Arch Linux)
+
+```bash
+yay -S nclaw-bin
+```
+
+#### DEB / RPM / APK
+
+Download the appropriate package from the [Releases](https://github.com/nickalie/nclaw/releases) page:
+
+```bash
+# Debian/Ubuntu
+sudo dpkg -i nclaw_*.deb
+
+# Fedora/RHEL
+sudo rpm -i nclaw_*.rpm
+
+# Alpine
+sudo apk add --allow-untrusted nclaw_*.apk
+```
+
+#### Binary download
+
+Pre-built binaries for Linux, macOS, and Windows (amd64/arm64) are available on the [Releases](https://github.com/nickalie/nclaw/releases) page.
+
+#### Go install
+
+```bash
+CGO_ENABLED=1 go install github.com/nickalie/nclaw/cmd/nclaw@latest
+```
+
+Requires Go 1.25+ and a C compiler (CGO is needed for SQLite).
+
+### Usage
+
+1. Install Claude Code CLI and authenticate:
    ```bash
    curl -fsSL https://claude.ai/install.sh | bash
    claude login
    ```
-3. Create a `.env` file or export environment variables:
+2. Create a `.env` file or export environment variables:
    ```bash
    export NCLAW_TELEGRAM_BOT_TOKEN=your-token
    export NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id
    export NCLAW_DATA_DIR=./data
    ```
-4. Run:
+3. Run:
    ```bash
    nclaw
    ```
 
 Any tools you want the assistant to use (git, gh, python, etc.) should be installed on the host. The assistant will use whatever is available in the system `PATH`.
-
-> **Security notice:** Without Docker, Claude Code runs directly on the host with the same permissions as the nclaw process. It has full access to the file system, network, and any credentials available to the user. Run under a dedicated unprivileged user and avoid running as root. For production use, Docker or Kubernetes deployment is strongly recommended.
 
 ## Configuration
 

@@ -147,9 +147,90 @@ jobs:
             -e SCOOP_GITHUB_TOKEN="${{ secrets.SCOOP_GITHUB_TOKEN }}" \
             -e WINGET_GITHUB_TOKEN="${{ secrets.WINGET_GITHUB_TOKEN }}" \
             -e AUR_SSH_KEY="${{ secrets.AUR_SSH_KEY }}" \
-            -e CHOCOLATEY_API_KEY="${{ secrets.CHOCOLATEY_API_KEY }}" \
             ghcr.io/goreleaser/goreleaser-cross:v1.25.7 \
             release --clean
+
+  chocolatey:
+    name: Chocolatey Push
+    runs-on: windows-latest
+    needs: [release]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Download release artifact
+        shell: bash
+        run: |
+          gh release download "${{ steps.version.outputs.tag }}" \
+            --pattern "nclaw_${{ steps.version.outputs.version }}_windows_amd64.zip" \
+            --dir .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Chocolatey package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $tag = "${{ steps.version.outputs.tag }}"
+          $zipPath = "nclaw_${version}_windows_amd64.zip"
+
+          # Compute checksum
+          $checksum = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash
+
+          # Create package directory
+          New-Item -ItemType Directory -Path "choco/tools" -Force | Out-Null
+
+          # Create nuspec
+          @"
+          <?xml version="1.0" encoding="utf-8"?>
+          <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+            <metadata>
+              <id>nclaw</id>
+              <version>$version</version>
+              <owners>nickalie</owners>
+              <title>nclaw</title>
+              <authors>nickalie</authors>
+              <projectUrl>https://github.com/nickalie/nclaw</projectUrl>
+              <projectSourceUrl>https://github.com/nickalie/nclaw</projectSourceUrl>
+              <bugTrackerUrl>https://github.com/nickalie/nclaw/issues</bugTrackerUrl>
+              <licenseUrl>https://github.com/nickalie/nclaw/blob/main/LICENSE</licenseUrl>
+              <releaseNotes>https://github.com/nickalie/nclaw/releases/tag/$tag</releaseNotes>
+              <description>Lightweight, container-first AI assistant powered by Claude Code, accessible through Telegram</description>
+            </metadata>
+          </package>
+          "@ | Set-Content -Path "choco/nclaw.nuspec"
+
+          # Create install script
+          @"
+          `$ErrorActionPreference = 'Stop'
+          `$toolsDir = "`$(Split-Path -parent `$MyInvocation.MyCommand.Definition)"
+          `$url = "https://github.com/nickalie/nclaw/releases/download/$tag/nclaw_${version}_windows_amd64.zip"
+          `$packageArgs = @{
+            packageName   = 'nclaw'
+            unzipLocation = `$toolsDir
+            url64bit      = `$url
+            checksum64    = '$checksum'
+            checksumType64= 'sha256'
+          }
+          Install-ChocolateyZipPackage @packageArgs
+          "@ | Set-Content -Path "choco/tools/chocolateyinstall.ps1"
+
+          # Pack
+          choco pack "choco/nclaw.nuspec" --output-directory "choco"
+
+      - name: Push to Chocolatey
+        shell: pwsh
+        run: |
+          choco push "choco/nclaw.${{ steps.version.outputs.version }}.nupkg" --source https://push.chocolatey.org/ --api-key "${{ secrets.CHOCOLATEY_API_KEY }}"
 
   helm:
     name: Helm Chart Push

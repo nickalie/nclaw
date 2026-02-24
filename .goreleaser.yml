@@ -66,7 +66,7 @@ nfpms:
     vendor: nickalie
     homepage: https://github.com/nickalie/nclaw
     maintainer: nickalie
-    description: Telegram bot wrapping Claude Code CLI
+    description: Lightweight, container-first AI assistant powered by Claude Code, accessible through Telegram
     license: MIT
     formats:
       - deb
@@ -77,7 +77,7 @@ nfpms:
 aurs:
   - name: nclaw-bin
     homepage: https://github.com/nickalie/nclaw
-    description: Telegram bot wrapping Claude Code CLI
+    description: Lightweight, container-first AI assistant powered by Claude Code, accessible through Telegram
     license: MIT
     maintainers:
       - nickalie
@@ -90,7 +90,7 @@ brews:
       name: homebrew-apps
       token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}"
     homepage: https://github.com/nickalie/nclaw
-    description: Telegram bot wrapping Claude Code CLI
+    description: Lightweight, container-first AI assistant powered by Claude Code, accessible through Telegram
     license: MIT
 
 scoops:
@@ -99,24 +99,13 @@ scoops:
       name: scoop-bucket
       token: "{{ .Env.SCOOP_GITHUB_TOKEN }}"
     homepage: https://github.com/nickalie/nclaw
-    description: Telegram bot wrapping Claude Code CLI
+    description: Lightweight, container-first AI assistant powered by Claude Code, accessible through Telegram
     license: MIT
 
-chocolateys:
-  - name: nclaw
-    owners: nickalie
-    authors: nickalie
-    project_url: https://github.com/nickalie/nclaw
-    license_url: https://github.com/nickalie/nclaw/blob/main/LICENSE
-    project_source_url: https://github.com/nickalie/nclaw
-    bug_tracker_url: https://github.com/nickalie/nclaw/issues
-    description: Telegram bot wrapping Claude Code CLI
-    release_notes: "https://github.com/nickalie/nclaw/releases/tag/v{{ .Version }}"
-    api_key: "{{ .Env.CHOCOLATEY_API_KEY }}"
 
 winget:
   - publisher: nickalie
-    short_description: Telegram bot wrapping Claude Code CLI
+    short_description: Lightweight, container-first AI assistant powered by Claude Code, accessible through Telegram
     license: MIT
     publisher_url: https://github.com/nickalie
     homepage: https://github.com/nickalie/nclaw
