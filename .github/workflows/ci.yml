@@ -144,6 +144,7 @@ jobs:
             -v "${{ github.workspace }}:/go/src/github.com/${{ github.repository }}" \
             -w "/go/src/github.com/${{ github.repository }}" \
             -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            -e HOMEBREW_GITHUB_TOKEN="${{ secrets.HOMEBREW_GITHUB_TOKEN }}" \
             -e SCOOP_GITHUB_TOKEN="${{ secrets.SCOOP_GITHUB_TOKEN }}" \
             -e WINGET_GITHUB_TOKEN="${{ secrets.WINGET_GITHUB_TOKEN }}" \
             -e AUR_SSH_KEY="${{ secrets.AUR_SSH_KEY }}" \

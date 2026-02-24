@@ -50,18 +50,18 @@ builds:
 
 archives:
   - id: nclaw
-    builds:
+    ids:
       - nclaw
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 nfpms:
   - id: nclaw
     package_name: nclaw
-    builds:
+    ids:
       - nclaw
     vendor: nickalie
     homepage: https://github.com/nickalie/nclaw
@@ -84,7 +84,7 @@ aurs:
     private_key: "{{ .Env.AUR_SSH_KEY }}"
     git_url: "ssh://aur@aur.archlinux.org/nclaw-bin.git"
 
-brews:
+homebrew_casks:
   - repository:
       owner: nickalie
       name: homebrew-apps

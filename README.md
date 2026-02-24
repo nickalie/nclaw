@@ -141,7 +141,7 @@ NClaw is a regular executable and can run directly on any machine. The only runt
 #### Homebrew (macOS/Linux)
 
 ```bash
-brew install nickalie/apps/nclaw
+brew install --cask nickalie/apps/nclaw
 ```
 
 #### Scoop (Windows)
