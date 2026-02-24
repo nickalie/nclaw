@@ -18,6 +18,7 @@
   - [Go install](#go-install)
   - [Docker](#docker)
   - [Kubernetes (Helm)](#kubernetes-helm)
+- [Running without Docker](#running-without-docker)
 - [Configuration](#configuration)
   - [Environment variables](#environment-variables)
   - [Config file](#config-file)
@@ -46,11 +47,11 @@ You message the assistant through Telegram. It invokes the Claude Code CLI, pres
 
 ```
 Telegram  -\
-Scheduler -->  Claude Code CLI (in container)  -->  Telegram
+Scheduler -->  Claude Code CLI  -->  Telegram
 Webhook   -/
 ```
 
-Claude runs inside a Docker container that serves as the security sandbox. The image ships with git, GitHub CLI, Chromium, Go, Node.js, and Python/uv — making it a capable assistant out of the box.
+The recommended way to run NClaw is inside Docker — the container serves as a security sandbox, and the image ships with all the tools the assistant might need. However, NClaw is a regular executable and can run directly on any machine with Claude Code CLI installed.
 
 ## Features
 
@@ -180,6 +181,31 @@ kubectl create secret generic my-claude-secret \
 | `resources.requests.memory` | `128Mi` | Memory request |
 | `resources.limits.cpu` | `1000m` | CPU limit |
 | `resources.limits.memory` | `2Gi` | Memory limit |
+
+## Running without Docker
+
+Even though NClaw is container-first, it's a regular executable that runs on any machine. The only runtime dependency is [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) — it must be installed and available in `PATH`.
+
+1. Install NClaw using any [method above](#installation).
+2. Install Claude Code CLI and authenticate:
+   ```bash
+   curl -fsSL https://claude.ai/install.sh | bash
+   claude login
+   ```
+3. Create a `.env` file or export environment variables:
+   ```bash
+   export NCLAW_TELEGRAM_BOT_TOKEN=your-token
+   export NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id
+   export NCLAW_DATA_DIR=./data
+   ```
+4. Run:
+   ```bash
+   nclaw
+   ```
+
+Any tools you want the assistant to use (git, gh, python, etc.) should be installed on the host. The assistant will use whatever is available in the system `PATH`.
+
+> **Security notice:** Without Docker, Claude Code runs directly on the host with the same permissions as the nclaw process. It has full access to the file system, network, and any credentials available to the user. Run under a dedicated unprivileged user and avoid running as root. For production use, Docker or Kubernetes deployment is strongly recommended.
 
 ## Configuration
 
