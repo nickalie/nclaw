@@ -1,5 +1,8 @@
 version: 2
 
+release:
+  draft: true
+
 builds:
   - id: nclaw
     main: ./cmd/nclaw
