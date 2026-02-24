@@ -170,7 +170,8 @@ func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {
 }
 
 func isChatAllowed(chatID int64) bool {
-	return slices.Contains(config.WhitelistChatIDs(), chatID)
+	ids := config.WhitelistChatIDs()
+	return len(ids) == 0 || slices.Contains(ids, chatID)
 }
 
 func ensureDir(dir string) {

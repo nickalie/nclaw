@@ -1,29 +1,48 @@
 # nclaw
 
-A personal Claude assistant that lives in Telegram. Built in Go, runs in Docker, gives you a persistent AI coding agent you can message from your phone.
+**N**Claw — a**N**other Claw. A lightweight, container-first AI assistant powered by Claude Code, accessible through Telegram. Written in Go.
 
-Inspired by [NanoClaw](https://github.com/qwibitai/nanoclaw) — same philosophy of simplicity, different stack and channel.
+## Table of Contents
 
-## Why
+- [Why NClaw](#why-nclaw)
+- [How It Works](#how-it-works)
+- [Features](#features)
+- [Installation](#installation)
+  - [Homebrew (macOS/Linux)](#homebrew-macoslinux)
+  - [Scoop (Windows)](#scoop-windows)
+  - [Chocolatey (Windows)](#chocolatey-windows)
+  - [Winget (Windows)](#winget-windows)
+  - [AUR (Arch Linux)](#aur-arch-linux)
+  - [DEB / RPM / APK](#deb--rpm--apk)
+  - [Binary download](#binary-download)
+  - [Go install](#go-install)
+  - [Docker](#docker)
+  - [Kubernetes (Helm)](#kubernetes-helm)
+- [Configuration](#configuration)
+  - [Environment variables](#environment-variables)
+  - [Config file](#config-file)
+- [Scheduling](#scheduling)
+- [Webhooks](#webhooks)
+- [Skills](#skills)
+- [GitOps Deployment](#gitops-deployment)
+  - [FluxCD](#fluxcd)
+  - [ArgoCD](#argocd)
+- [Development](#development)
+- [License](#license)
 
-I wanted a Claude Code assistant I could reach from anywhere. Not a chatbot wrapper — the real Claude Code CLI with full tool access, session persistence, and the ability to manage my infrastructure. Small enough to understand, powerful enough to be useful.
+## Why NClaw
 
-## Quick Start
+There are many Claude Code assistants already — [OpenClaw](https://openclaw.ai/), [NanoClaw](https://github.com/qwibitai/nanoclaw), [ClaudeClaw](https://github.com/moazbuilds/claudeclaw), and others. NClaw exists because none of them satisfied three requirements at once:
 
-```bash
-git clone https://github.com/nickalie/nclaw.git
-cd nclaw
-# Create .env with your config (see Configuration below)
-echo 'NCLAW_TELEGRAM_BOT_TOKEN=your-token-here' > .env
-echo 'NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id' >> .env
-echo 'NCLAW_DATA_DIR=data' >> .env
-docker build -t nclaw .
-docker run -d --name nclaw --env-file .env nclaw
-```
+**Container-first.** NClaw is built to run in Docker and Kubernetes from day one. The repo ships a multi-stage Dockerfile and a Helm chart. No manual setup, no runtime dependency resolution — `docker run` or `helm install` and you're done.
+
+**Lightweight.** A single Go binary. Idles at ~10 MB of RAM. No runtime interpreter, no package manager overhead, no garbage collection pauses that matter.
+
+**Telegram topics as projects.** NClaw treats each Telegram topic (thread) as a separate Claude Code session with its own working directory. One group chat with topics becomes a multi-project workspace — each topic gets isolated context, history, and files.
 
 ## How It Works
 
-You message the Telegram bot. It invokes the Claude Code CLI, preserving conversation history per chat thread, and sends back the response.
+You message the assistant through Telegram. It invokes the Claude Code CLI, preserving conversation history per chat/topic, and sends back the response.
 
 ```
 Telegram  -\
@@ -35,27 +54,170 @@ Claude runs inside a Docker container that serves as the security sandbox. The i
 
 ## Features
 
-- **Session persistence** — Each chat thread maintains its own Claude session. Pick up where you left off.
+- **Session persistence** — Each chat/topic maintains its own Claude session. Pick up where you left off.
+- **Telegram topics** — Each topic in a group chat is a separate project with isolated context and files.
 - **File attachments** — Send photos, documents, audio, video to Claude.
 - **File delivery** — Claude can send files back to you (generated reports, exports, code).
 - **Scheduled tasks** — Create recurring or one-time jobs using natural language.
 - **Webhooks** — Register HTTP endpoints that forward incoming requests to Claude in your chat.
-- **Rich runtime** — Docker image includes git, gh CLI, Chromium, Go, Node.js, Python/uv.
+- **Rich runtime** — Docker image includes git, gh CLI, Chromium, Go, Node.js, Python/uv. The assistant can install additional packages on the fly as needed — for example, `apk add ffmpeg` to process video, `npm install -g prettier` to format code, or `pip install pandas` to analyze data.
 - **HTML-formatted replies** — Responses render using Telegram's HTML formatting with plain-text fallback.
+
+## Installation
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew install nickalie/apps/nclaw
+```
+
+### Scoop (Windows)
+
+```powershell
+scoop bucket add nickalie https://github.com/nickalie/scoop-bucket
+scoop install nclaw
+```
+
+### Chocolatey (Windows)
+
+```powershell
+choco install nclaw
+```
+
+### Winget (Windows)
+
+```powershell
+winget install nickalie.nclaw
+```
+
+### AUR (Arch Linux)
+
+```bash
+yay -S nclaw-bin
+```
+
+### DEB / RPM / APK
+
+Download the appropriate package from the [Releases](https://github.com/nickalie/nclaw/releases) page:
+
+```bash
+# Debian/Ubuntu
+sudo dpkg -i nclaw_*.deb
+
+# Fedora/RHEL
+sudo rpm -i nclaw_*.rpm
+
+# Alpine
+sudo apk add --allow-untrusted nclaw_*.apk
+```
+
+### Binary download
+
+Pre-built binaries for Linux, macOS, and Windows (amd64/arm64) are available on the [Releases](https://github.com/nickalie/nclaw/releases) page.
+
+### Go install
+
+```bash
+CGO_ENABLED=1 go install github.com/nickalie/nclaw/cmd/nclaw@latest
+```
+
+Requires Go 1.25+ and a C compiler (CGO is needed for SQLite).
+
+### Docker
+
+```bash
+docker run -d --name nclaw \
+  -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
+  -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+  -e NCLAW_DATA_DIR=/app/data \
+  -v ./data:/app/data \
+  -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
+  ghcr.io/nickalie/nclaw:latest
+```
+
+The Docker image is based on `node:24-alpine` and includes Claude Code, git, gh CLI, Chromium, Go, Node.js, and Python/uv. The assistant can install any additional packages at runtime as the task requires (e.g. `apk add ffmpeg`, `pip install pandas`, `npm install -g typescript`).
+
+### Kubernetes (Helm)
+
+The Helm chart is published as an OCI artifact to GHCR.
+
+```bash
+helm install nclaw oci://ghcr.io/nickalie/charts/nclaw \
+  --set env.telegramBotToken=your-token \
+  --set env.whitelistChatIds=your-chat-id \
+  --set claudeCredentialsSecret=my-claude-secret
+```
+
+Create the Claude credentials secret beforehand:
+
+```bash
+kubectl create secret generic my-claude-secret \
+  --from-file=credentials.json=$HOME/.claude/.credentials.json
+```
+
+#### Helm values
+
+| Parameter | Default | Description |
+|---|---|---|
+| `image.repository` | `ghcr.io/nickalie/nclaw` | Docker image |
+| `image.tag` | Chart appVersion | Image tag |
+| `env.dataDir` | `/app/data` | Data directory inside container |
+| `env.telegramBotToken` | `""` | Telegram bot token |
+| `env.whitelistChatIds` | `""` | Comma-separated allowed chat IDs |
+| `env.webhookBaseDomain` | `""` | Base domain for webhook URLs |
+| `existingSecret` | `""` | Use existing secret for bot token (key: `telegram-bot-token`) |
+| `claudeCredentialsSecret` | `""` | Secret with Claude credentials (key: `credentials.json`) |
+| `persistence.enabled` | `true` | Enable persistent storage |
+| `persistence.size` | `1Gi` | PVC size |
+| `persistence.storageClass` | `""` | Storage class |
+| `persistence.existingClaim` | `""` | Use existing PVC |
+| `rbac.create` | `true` | Create ServiceAccount and ClusterRoleBinding |
+| `rbac.clusterRole` | `cluster-admin` | ClusterRole to bind |
+| `proxy.enabled` | `false` | Enable HTTP proxy |
+| `proxy.httpProxy` | `""` | HTTP_PROXY value |
+| `proxy.httpsProxy` | `""` | HTTPS_PROXY value |
+| `resources.requests.cpu` | `100m` | CPU request |
+| `resources.requests.memory` | `128Mi` | Memory request |
+| `resources.limits.cpu` | `1000m` | CPU limit |
+| `resources.limits.memory` | `2Gi` | Memory limit |
 
 ## Configuration
 
-Supports `.env` files, `config.yaml`, or `$HOME/.nclaw/config.yaml`. Environment variables use the `NCLAW_` prefix.
+NClaw reads configuration from environment variables, `.env` files, or YAML config files.
 
-| Variable | Required | Description |
-|---|---|---|
-| `NCLAW_TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token from [@BotFather](https://t.me/BotFather) |
-| `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | Yes | Comma-separated list of allowed Telegram chat IDs |
-| `NCLAW_DATA_DIR` | Yes | Base directory for data storage |
-| `NCLAW_DB_PATH` | No | SQLite path (default: `{data_dir}/nclaw.db`) |
-| `NCLAW_TIMEZONE` | No | Timezone for scheduler (default: system local) |
-| `NCLAW_WEBHOOK_BASE_DOMAIN` | No | Base domain for webhook URLs (required when using webhooks) |
-| `NCLAW_WEBHOOK_PORT` | No | Webhook HTTP server listen address (default: `:3000`) |
+### Environment variables
+
+All variables use the `NCLAW_` prefix.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `NCLAW_TELEGRAM_BOT_TOKEN` | Yes | — | Telegram bot token from [@BotFather](https://t.me/BotFather) |
+| `NCLAW_DATA_DIR` | Yes | — | Base directory for session data and files |
+| `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | No | — | Comma-separated list of allowed Telegram chat IDs. If unset, accepts all chats (with a security warning) |
+| `NCLAW_DB_PATH` | No | `{data_dir}/nclaw.db` | Path to the SQLite database |
+| `NCLAW_TIMEZONE` | No | system local | Timezone for the scheduler (e.g. `Europe/Berlin`) |
+| `NCLAW_WEBHOOK_BASE_DOMAIN` | No | — | Base domain for webhook URLs (required when using webhooks) |
+| `NCLAW_WEBHOOK_PORT` | No | `:3000` | Webhook HTTP server listen address |
+
+> **Security notice:** If `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` is not set, the assistant will accept messages from **any** Telegram chat. Since NClaw runs Claude Code with full tool access (file system, shell, network), this effectively gives anyone who discovers your bot unrestricted access to the host environment. Always set this variable in production.
+
+### Config file
+
+NClaw looks for `config.yaml` in the current directory or `$HOME/.nclaw/`. Nested keys map to env vars with underscores (e.g. `telegram.bot_token` = `NCLAW_TELEGRAM_BOT_TOKEN`).
+
+```yaml
+telegram:
+  bot_token: "your-telegram-bot-token"
+  whitelist_chat_ids: "123456789,987654321"
+
+data_dir: "/app/data"
+db_path: "/app/data/nclaw.db"
+timezone: "Europe/Berlin"
+
+webhook:
+  base_domain: "example.com"
+  port: ":3000"
+```
 
 ## Scheduling
 
@@ -96,12 +258,86 @@ Six skills ship with nclaw:
 | `skill-creator` | [anthropics/skills](https://github.com/anthropics/skills) | Guide for creating new custom skills |
 | `agent-browser` | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) | Browse the web using system Chromium |
 
+## GitOps Deployment
+
+### FluxCD
+
+```yaml
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: nclaw
+  namespace: flux-system
+spec:
+  type: oci
+  interval: 10m
+  url: oci://ghcr.io/nickalie/charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: nclaw
+  namespace: nclaw
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: nclaw
+      sourceRef:
+        kind: HelmRepository
+        name: nclaw
+        namespace: flux-system
+  values:
+    env:
+      whitelistChatIds: "123456789"
+      webhookBaseDomain: "example.com"
+    existingSecret: nclaw-secrets
+    claudeCredentialsSecret: claude-credentials
+    persistence:
+      size: 5Gi
+```
+
+### ArgoCD
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nclaw
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: nclaw
+    repoURL: ghcr.io/nickalie/charts
+    targetRevision: "*"
+    helm:
+      valuesObject:
+        env:
+          whitelistChatIds: "123456789"
+          webhookBaseDomain: "example.com"
+        existingSecret: nclaw-secrets
+        claudeCredentialsSecret: claude-credentials
+        persistence:
+          size: 5Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nclaw
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
 ## Development
 
 ```bash
 make run     # Run locally
-make lint    # Lint
+make lint    # Lint with golangci-lint
 make test    # Run tests (requires CGO)
+make docker  # Build and run in Docker
 ```
 
 ## License

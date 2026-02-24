@@ -147,6 +147,7 @@ jobs:
             -e SCOOP_GITHUB_TOKEN="${{ secrets.SCOOP_GITHUB_TOKEN }}" \
             -e WINGET_GITHUB_TOKEN="${{ secrets.WINGET_GITHUB_TOKEN }}" \
             -e AUR_SSH_KEY="${{ secrets.AUR_SSH_KEY }}" \
+            -e CHOCOLATEY_API_KEY="${{ secrets.CHOCOLATEY_API_KEY }}" \
             ghcr.io/goreleaser/goreleaser-cross:v1.25.7 \
             release --clean
 

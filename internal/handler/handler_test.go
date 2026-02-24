@@ -196,6 +196,13 @@ func TestIsChatAllowed(t *testing.T) {
 	assert.False(t, isChatAllowed(999))
 }
 
+func TestIsChatAllowed_NoWhitelist(t *testing.T) {
+	viper.Reset()
+
+	assert.True(t, isChatAllowed(100))
+	assert.True(t, isChatAllowed(999))
+}
+
 func TestChatDir_NoThread(t *testing.T) {
 	viper.Set("data_dir", "/data")
 	defer viper.Reset()

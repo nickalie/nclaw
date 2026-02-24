@@ -14,7 +14,6 @@ import (
 
 var requiredKeys = []string{
 	"telegram.bot_token",
-	"telegram.whitelist_chat_ids",
 	"data_dir",
 }
 
@@ -93,6 +92,13 @@ func WebhookPort() string {
 		return p
 	}
 	return ":3000"
+}
+
+// LogSecurityWarnings logs warnings for security-sensitive configuration.
+func LogSecurityWarnings() {
+	if len(WhitelistChatIDs()) == 0 {
+		log.Println("WARNING: telegram.whitelist_chat_ids is not set — bot will accept messages from ANY chat")
+	}
 }
 
 // Timezone returns the configured timezone name, defaulting to system local.
