@@ -235,6 +235,7 @@ jobs:
           choco pack "choco/nclaw.nuspec" --output-directory "choco"
 
       - name: Push to Chocolatey
+        continue-on-error: true
         shell: pwsh
         run: |
           choco push "choco/nclaw.${{ steps.version.outputs.version }}.nupkg" --source https://push.chocolatey.org/ --api-key "${{ secrets.CHOCOLATEY_API_KEY }}"
