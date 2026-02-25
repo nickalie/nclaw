@@ -20,6 +20,8 @@ RUN go build -ldflags "\
 
 FROM node:24-alpine
 
+LABEL org.opencontainers.image.source="https://github.com/nickalie/nclaw"
+
 RUN apk add --no-cache \
     git \
     bash \
