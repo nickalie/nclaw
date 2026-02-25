@@ -293,6 +293,8 @@ Six skills ship with nclaw:
 | `skill-creator` | [anthropics/skills](https://github.com/anthropics/skills) | Guide for creating new custom skills |
 | `agent-browser` | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) | Browse the web using system Chromium |
 
+The assistant can also create its own skills on the fly when a task requires specialized or repeatable behavior that isn't covered by the built-in set.
+
 ## GitOps Deployment
 
 ### FluxCD
