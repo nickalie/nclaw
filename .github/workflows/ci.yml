@@ -200,13 +200,17 @@ jobs:
               <id>nclaw</id>
               <version>$version</version>
               <owners>nickalie</owners>
-              <title>nclaw</title>
+              <title>nclaw - AI Assistant powered by Claude Code</title>
               <authors>nickalie</authors>
+              <summary>Lightweight, container-first AI assistant powered by Claude Code</summary>
               <projectUrl>https://github.com/nickalie/nclaw</projectUrl>
               <projectSourceUrl>https://github.com/nickalie/nclaw</projectSourceUrl>
+              <packageSourceUrl>https://github.com/nickalie/nclaw</packageSourceUrl>
               <bugTrackerUrl>https://github.com/nickalie/nclaw/issues</bugTrackerUrl>
+              <iconUrl>https://cdn.jsdelivr.net/gh/nickalie/nclaw@main/assets/icon.svg</iconUrl>
               <licenseUrl>https://github.com/nickalie/nclaw/blob/main/LICENSE</licenseUrl>
-              <releaseNotes>https://github.com/nickalie/nclaw/releases/tag/$tag</releaseNotes>
+              <releaseNotes>https://github.com/nickalie/nclaw/releases/tag/v$version</releaseNotes>
+              <tags>telegram bot claude ai assistant cli chatbot</tags>
               <description>Lightweight, container-first AI assistant powered by Claude Code, accessible through Telegram</description>
             </metadata>
           </package>

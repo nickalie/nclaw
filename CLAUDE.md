@@ -105,7 +105,14 @@ make docker  # Build and run in Docker
 GitHub Actions pipeline (`.github/workflows/ci.yml`):
 1. **Lint** - golangci-lint
 2. **Test** - `go test -v ./...`
-3. **Docker** - Build and push to GHCR on push to main or tagged releases
+3. **Release** - GoReleaser cross-compilation (on tag push)
+4. **Chocolatey** - Build and push `.nupkg` to Chocolatey (on tag push, Windows runner)
+5. **Docker** - Build and push to GHCR on push to main or tagged releases
+6. **Helm** - Push Helm chart to GHCR OCI registry (on tag push)
+7. **Publish** - Promote draft release to published (after all jobs pass)
+
+### Chocolatey Package
+The nuspec is generated inline in the CI workflow. It must include: `title` (distinct from id), `summary`, `tags` (space-separated), `packageSourceUrl`, `iconUrl`, and a valid `releaseNotes` URL. Icon lives at `assets/icon.svg` in the repo (served via jsDelivr CDN).
 
 ## Docker
 
