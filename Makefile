@@ -1,4 +1,4 @@
-.PHONY: run lint test docker
+.PHONY: run lint test docker smoke-test
 
 VERSION    ?= dev
 COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -25,3 +25,6 @@ docker:
 		-v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro,Z \
 		--network=host \
 		nclaw
+
+smoke-test:
+	./test/install/smoke-test.sh $(TESTS)
