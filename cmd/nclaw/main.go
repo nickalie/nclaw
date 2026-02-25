@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-telegram/bot/models"
 	"gorm.io/gorm"
 
+	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/handler"
@@ -25,6 +27,13 @@ import (
 )
 
 func main() {
+	if hasFlag("-v", "--version") {
+		if err := printVersion(); err != nil {
+			os.Exit(1)
+		}
+		return
+	}
+
 	if err := config.Init(); err != nil {
 		log.Fatal(err)
 	}
@@ -39,6 +48,25 @@ func main() {
 		log.Fatal("db init: ", err)
 	}
 
+	// Verify Claude Code CLI is available before starting.
+	claudeVer, err := claude.New().Version()
+	if err != nil {
+		log.Fatalf("claude code cli not found: %v", err)
+	}
+
+	b, sched, webhookMgr, webhookSrv := setupBot(database)
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	defer sched.Shutdown()
+	defer shutdownWebhook(webhookSrv, webhookMgr)
+
+	log.Printf("nclaw bot started (%s, claude code: %s)", version.String(), claudeVer)
+	sendStartupNotifications(b)
+	b.Start(ctx)
+}
+
+func setupBot(database *gorm.DB) (*bot.Bot, *scheduler.Scheduler, *webhook.Manager, *webhook.Server) {
 	chatLocker := telegram.NewChatLocker()
 	h := &handler.Handler{ChatLocker: chatLocker}
 
@@ -62,14 +90,7 @@ func main() {
 	h.Scheduler = sched
 
 	webhookMgr := createWebhookManager(database, chatLocker)
-
-	// Build pipeline executors; avoid Go nil interface trap for webhookMgr.
-	executors := []pipeline.BlockExecutor{sched}
-	if webhookMgr != nil {
-		executors = append(executors, webhookMgr)
-	}
-	fileSenders.MediaGroup = newSendMediaGroupFunc(b)
-	p := pipeline.New(newPipelineSendFunc(b), fileSenders, webhookMgr != nil, executors...)
+	p := buildPipeline(b, fileSenders, sched, webhookMgr)
 	h.Pipeline = p
 	sched.SetPipeline(p)
 	if webhookMgr != nil {
@@ -84,14 +105,41 @@ func main() {
 	// Start webhook HTTP server after pipeline is wired and scheduler is loaded.
 	webhookSrv := startWebhookServer(webhookMgr)
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	defer sched.Shutdown()
-	defer shutdownWebhook(webhookSrv, webhookMgr)
+	return b, sched, webhookMgr, webhookSrv
+}
 
-	log.Printf("nclaw bot started (%s)", version.String())
-	sendStartupNotifications(b)
-	b.Start(ctx)
+func buildPipeline(
+	b *bot.Bot, fileSenders sendfile.Senders,
+	sched *scheduler.Scheduler, webhookMgr *webhook.Manager,
+) *pipeline.Pipeline {
+	executors := []pipeline.BlockExecutor{sched}
+	if webhookMgr != nil {
+		executors = append(executors, webhookMgr)
+	}
+	fileSenders.MediaGroup = newSendMediaGroupFunc(b)
+	return pipeline.New(newPipelineSendFunc(b), fileSenders, webhookMgr != nil, executors...)
+}
+
+func hasFlag(flags ...string) bool {
+	for _, arg := range os.Args[1:] {
+		for _, f := range flags {
+			if arg == f {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func printVersion() error {
+	fmt.Printf("nclaw %s\n", version.String())
+	v, err := claude.New().Version()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "claude code: error: %v\n", err)
+		return err
+	}
+	fmt.Printf("claude code: %s\n", v)
+	return nil
 }
 
 func sendStartupNotifications(b *bot.Bot) {
