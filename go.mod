@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/go-co-op/gocron/v2 v2.19.1
 	github.com/go-telegram/bot v1.18.0
-	github.com/gofiber/fiber/v2 v2.52.11
+	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/nickalie/go-binwrapper v0.0.0-20260217210324-ce887a3b6d18
