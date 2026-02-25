@@ -260,21 +260,18 @@ jobs:
       - name: Package chart
         run: helm package ./chart --version "${{ needs.docker.outputs.image-tag }}" --app-version "${{ needs.docker.outputs.image-tag }}"
 
-      - name: Install ORAS
-        uses: oras-project/setup-oras@v1
-
-      - name: Log in to GHCR (ORAS)
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.4
 
       - name: Push chart to GHCR
         run: helm push nclaw-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
-      - name: Re-tag chart with source annotation for GHCR repo linking
+      - name: Add source annotation for GHCR repo linking
         run: |
           TAG="${{ needs.docker.outputs.image-tag }}"
-          REF="ghcr.io/${{ github.repository_owner }}/charts/nclaw:${TAG}"
-          oras copy "${REF}" "${REF}" \
-            --to-annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}"
+          crane auth login ghcr.io -u ${{ github.actor }} -p "${{ secrets.GITHUB_TOKEN }}"
+          crane mutate "ghcr.io/${{ github.repository_owner }}/charts/nclaw:${TAG}" \
+            --annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}"
 
   publish:
     name: Publish Release
