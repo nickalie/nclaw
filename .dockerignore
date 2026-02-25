@@ -6,6 +6,7 @@
 .serena
 .agents
 data
+test
 *.swp
 *.swo
 .DS_Store
