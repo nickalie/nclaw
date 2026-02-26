@@ -106,6 +106,7 @@ make docker-copilot  # Build Copilot-only image
 - Max line length: 140
 - Keep methods small to stay under complexity limit
 - Standard Go conventions
+- Never mention "Claude Code" in commit messages or PR titles/descriptions
 
 ## Tech Stack
 
