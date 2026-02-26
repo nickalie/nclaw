@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/nickalie/nclaw/internal/claude"
+	"github.com/nickalie/nclaw/internal/cli"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/pipeline"
@@ -25,6 +25,7 @@ import (
 type Scheduler struct {
 	cron       gocron.Scheduler
 	db         *gorm.DB
+	provider   cli.Provider
 	pipeline   *pipeline.Pipeline
 	dataDir    string
 	loc        *time.Location
@@ -37,7 +38,7 @@ type Scheduler struct {
 
 // New creates a new Scheduler.
 func New(
-	database *gorm.DB,
+	database *gorm.DB, provider cli.Provider,
 	timezone, dataDir string, chatLocker *telegram.ChatLocker,
 ) (*Scheduler, error) {
 	loc, err := time.LoadLocation(timezone)
@@ -54,6 +55,7 @@ func New(
 	return &Scheduler{
 		cron:       cron,
 		db:         database,
+		provider:   provider,
 		dataDir:    dataDir,
 		loc:        loc,
 		chatLocker: chatLocker,
@@ -260,8 +262,12 @@ func (s *Scheduler) executeTask(taskID string) {
 	}
 
 	prompt := "[SCHEDULED TASK - Running automatically, not in response to a user message]\n\n" + task.Prompt
-	result, runErr := s.invokeClaudeForTask(task, dir, prompt)
+	result, runErr := s.invokeCLI(task, dir, prompt)
 	duration := time.Since(start)
+
+	if result == nil {
+		result = &cli.Result{}
+	}
 
 	if runErr != nil {
 		log.Printf("scheduler: task %s failed after %s: %v", taskID, duration, runErr)
@@ -273,7 +279,7 @@ func (s *Scheduler) executeTask(taskID string) {
 }
 
 // finalizeAndSend records run results and sends the reply, unless the task was canceled.
-func (s *Scheduler) finalizeAndSend(task *model.ScheduledTask, result *claude.Result, runErr error, duration time.Duration) {
+func (s *Scheduler) finalizeAndSend(task *model.ScheduledTask, result *cli.Result, runErr error, duration time.Duration) {
 	// Atomically verify task still exists and record results.
 	err := s.recordResults(task, result.Text, runErr, duration)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -312,16 +318,16 @@ func (s *Scheduler) clearRunState(taskID string) {
 	s.mu.Unlock()
 }
 
-func (s *Scheduler) invokeClaudeForTask(task *model.ScheduledTask, dir, prompt string) (*claude.Result, error) {
-	if err := claude.EnsureValidToken(); err != nil {
-		log.Printf("scheduler: token refresh warning: %v", err)
+func (s *Scheduler) invokeCLI(task *model.ScheduledTask, dir, prompt string) (*cli.Result, error) {
+	if err := s.provider.PreInvoke(); err != nil {
+		log.Printf("scheduler: pre-invoke warning: %v", err)
 	}
 
 	unlock := s.chatLocker.Lock(task.ChatID, task.ThreadID)
 	defer unlock()
 
-	log.Printf("scheduler: invoking claude for task %s in dir=%s context=%s", task.ID, dir, task.ContextMode)
-	c := claude.New().Dir(dir).SkipPermissions()
+	log.Printf("scheduler: invoking %s for task %s in dir=%s context=%s", s.provider.Name(), task.ID, dir, task.ContextMode)
+	c := s.provider.NewClient().Dir(dir).SkipPermissions()
 	if task.ContextMode == model.ContextGroup {
 		return c.Continue(prompt)
 	}
@@ -391,14 +397,14 @@ func (s *Scheduler) resolveNextRun(task *model.ScheduledTask) *time.Time {
 	return s.getNextRun(jobID)
 }
 
-func (s *Scheduler) sendResult(task *model.ScheduledTask, result *claude.Result, runErr error) {
+func (s *Scheduler) sendResult(task *model.ScheduledTask, result *cli.Result, runErr error) {
 	if s.pipeline == nil {
 		log.Printf("scheduler: pipeline not ready, dropping result for task %s", task.ID)
 		return
 	}
 
 	if runErr != nil {
-		result = &claude.Result{
+		result = &cli.Result{
 			Text:     "Scheduled task error: " + runErr.Error(),
 			FullText: "Scheduled task error: " + runErr.Error(),
 		}

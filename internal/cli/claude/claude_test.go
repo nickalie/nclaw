@@ -2,6 +2,7 @@ package claude
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,12 +19,15 @@ func TestNew(t *testing.T) {
 func TestBuilderChaining(t *testing.T) {
 	c := New()
 
-	// Each builder method should return the same instance.
-	assert.Same(t, c, c.Dir("/tmp"))
+	// Interface-returning methods (cli.Client) return the same underlying instance.
+	assert.Same(t, c, c.Dir("/tmp").(*Claude))
+	assert.Same(t, c, c.AppendSystemPrompt("extra").(*Claude))
+	assert.Same(t, c, c.SkipPermissions().(*Claude))
+
+	// Claude-specific builder methods return *Claude directly.
 	assert.Same(t, c, c.Model("opus"))
 	assert.Same(t, c, c.FallbackModel("sonnet"))
 	assert.Same(t, c, c.SystemPrompt("sys"))
-	assert.Same(t, c, c.AppendSystemPrompt("extra"))
 	assert.Same(t, c, c.PermissionMode("plan"))
 	assert.Same(t, c, c.MCPConfig("/config.json"))
 	assert.Same(t, c, c.JSONSchema("{}"))
@@ -33,7 +37,6 @@ func TestBuilderChaining(t *testing.T) {
 	assert.Same(t, c, c.DisallowedTools("Bash"))
 	assert.Same(t, c, c.Tools("Read"))
 	assert.Same(t, c, c.AddDirs("/extra"))
-	assert.Same(t, c, c.SkipPermissions())
 	assert.Same(t, c, c.NoSessionPersistence())
 	assert.Same(t, c, c.Verbose())
 	assert.Same(t, c, c.Timeout(30*time.Second))
@@ -43,11 +46,9 @@ func TestBuilderChaining(t *testing.T) {
 
 func TestBuilderFieldValues(t *testing.T) {
 	c := New().
-		Dir("/work").
 		Model("opus").
 		FallbackModel("sonnet").
 		SystemPrompt("system").
-		AppendSystemPrompt("append").
 		PermissionMode("plan").
 		MCPConfig("/mcp.json").
 		JSONSchema("{\"type\":\"object\"}").
@@ -58,6 +59,10 @@ func TestBuilderFieldValues(t *testing.T) {
 		Tools("Read", "Grep").
 		AddDirs("/extra1", "/extra2").
 		Env([]string{"KEY=val"})
+
+	// Interface methods called separately (they return cli.Client).
+	c.Dir("/work")
+	c.AppendSystemPrompt("append")
 
 	assert.Equal(t, "/work", c.dir)
 	assert.Equal(t, "opus", c.model)
@@ -146,4 +151,28 @@ func TestBuildEnv_NoCustomVars(t *testing.T) {
 	// Should have at least as many entries as os.Environ (minus any CLAUDECODE)
 	osEnv := os.Environ()
 	assert.GreaterOrEqual(t, len(env), len(osEnv)-1)
+}
+
+func TestNewProvider(t *testing.T) {
+	p := NewProvider()
+	assert.NotNil(t, p)
+	assert.Equal(t, "claude", p.Name())
+}
+
+func TestProvider_NewClient(t *testing.T) {
+	p := NewProvider()
+	client := p.NewClient()
+	assert.NotNil(t, client)
+
+	// The returned client should be a *Claude instance.
+	c, ok := client.(*Claude)
+	assert.True(t, ok)
+	assert.NotNil(t, c.bin)
+}
+
+func TestProvider_PreInvoke(t *testing.T) {
+	// PreInvoke wraps EnsureValidToken; with no credentials file, it should succeed.
+	p := NewProvider()
+	withTestCredPath(t, filepath.Join(t.TempDir(), "nonexistent.json"))
+	assert.NoError(t, p.PreInvoke())
 }

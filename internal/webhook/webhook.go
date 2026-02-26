@@ -12,7 +12,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/nickalie/nclaw/internal/claude"
+	"github.com/nickalie/nclaw/internal/cli"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/pipeline"
@@ -52,6 +52,7 @@ var sensitiveSubstrings = []string{"token", "secret", "signature", "api-key", "a
 // Manager handles webhook registration and incoming webhook processing.
 type Manager struct {
 	db         *gorm.DB
+	provider   cli.Provider
 	pipeline   *pipeline.Pipeline
 	baseDomain string
 	dataDir    string
@@ -62,11 +63,12 @@ type Manager struct {
 
 // NewManager creates a new webhook Manager.
 func NewManager(
-	database *gorm.DB,
+	database *gorm.DB, provider cli.Provider,
 	baseDomain, dataDir string, chatLocker *telegram.ChatLocker,
 ) *Manager {
 	return &Manager{
 		db:         database,
+		provider:   provider,
 		baseDomain: baseDomain,
 		dataDir:    dataDir,
 		sem:        make(chan struct{}, maxConcurrentWebhooks),
@@ -156,16 +158,20 @@ func (m *Manager) processIncoming(wh *model.WebhookRegistration, req IncomingReq
 		return
 	}
 
-	result, claudeErr := m.callClaude(wh, req)
+	result, cliErr := m.callCLI(wh, req)
+
+	if result == nil {
+		result = &cli.Result{}
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	dir := telegram.ChatDir(m.dataDir, wh.ChatID, wh.ThreadID)
-	m.pipeline.Process(ctx, result, claudeErr, wh.ChatID, wh.ThreadID, dir)
+	m.pipeline.Process(ctx, result, cliErr, wh.ChatID, wh.ThreadID, dir)
 }
 
-func (m *Manager) callClaude(wh *model.WebhookRegistration, req IncomingRequest) (*claude.Result, error) {
+func (m *Manager) callCLI(wh *model.WebhookRegistration, req IncomingRequest) (*cli.Result, error) {
 	unlock := m.chatLocker.Lock(wh.ChatID, wh.ThreadID)
 	defer unlock()
 
@@ -174,19 +180,18 @@ func (m *Manager) callClaude(wh *model.WebhookRegistration, req IncomingRequest)
 	dir := telegram.ChatDir(m.dataDir, wh.ChatID, wh.ThreadID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("webhook: mkdir %s: %v", dir, err)
-		return &claude.Result{}, fmt.Errorf("webhook: mkdir: %w", err)
+		return &cli.Result{}, fmt.Errorf("webhook: mkdir: %w", err)
 	}
 
-	if err := claude.EnsureValidToken(); err != nil {
-		log.Printf("webhook: token refresh warning: %v", err)
+	if err := m.provider.PreInvoke(); err != nil {
+		log.Printf("webhook: pre-invoke warning: %v", err)
 	}
 
-	result, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(telegram.Prompt).Continue(prompt)
+	result, err := m.provider.NewClient().Dir(dir).SkipPermissions().AppendSystemPrompt(telegram.Prompt).Continue(prompt)
 	if err != nil {
-		log.Printf("webhook: claude error for %s: %v", wh.ID, err)
-		if result.Text == "" {
-			result.Text = "Webhook processing failed"
-			result.FullText = "Webhook processing failed"
+		log.Printf("webhook: %s error for %s: %v", m.provider.Name(), wh.ID, err)
+		if result == nil || result.Text == "" {
+			result = &cli.Result{Text: "Webhook processing failed", FullText: "Webhook processing failed"}
 		}
 	}
 
