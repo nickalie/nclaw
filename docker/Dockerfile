@@ -18,7 +18,8 @@ RUN go build -ldflags "\
     -X github.com/nickalie/nclaw/internal/version.DockerTag=${DOCKER_TAG}" \
     -o nclaw ./cmd/nclaw
 
-FROM node:24-alpine
+# ---------- shared base ----------
+FROM node:24-alpine AS base
 
 LABEL org.opencontainers.image.source="https://github.com/nickalie/nclaw"
 
@@ -46,13 +47,10 @@ ENV IS_SANDBOX=1
 # Install uv (provides uv and uvx)
 RUN curl -LsSf https://astral.sh/uv/install.sh | bash
 
-# Install Claude Code (native install, auto-updates)
-RUN curl -fsSL https://claude.ai/install.sh | bash
-
 # Install agent-browser (uses system Chromium via env vars above)
 RUN npm install -g agent-browser
 
-# Install Claude Code skills
+# Install skills
 RUN npx -y skills add https://github.com/vercel-labs/skills --skill find-skills -g -y && \
     npx -y skills add https://github.com/anthropics/skills --skill skill-creator -g -y && \
     npx -y skills add https://github.com/vercel-labs/agent-browser --skill agent-browser -g -y
@@ -64,14 +62,38 @@ ENV PATH="/root/.local/bin:/usr/local/go/bin:${PATH}"
 # Copy application binary
 COPY --from=builder /build/nclaw /usr/local/bin/nclaw
 
-# Copy skills globally for Claude Code
-COPY .claude/skills/schedule /root/.claude/skills/schedule
-COPY .claude/skills/send-file /root/.claude/skills/send-file
-COPY .claude/skills/webhook /root/.claude/skills/webhook
-
-# Enable autocompact for Claude Code
-RUN echo '{"autoCompact": true}' > /root/.claude/settings.json
+# Stage custom nclaw skills (each variant copies to its own path)
+COPY .claude/skills/schedule /opt/nclaw-skills/schedule
+COPY .claude/skills/send-file /opt/nclaw-skills/send-file
+COPY .claude/skills/webhook /opt/nclaw-skills/webhook
 
 WORKDIR /app
-
 ENTRYPOINT ["nclaw"]
+
+# ---------- claude ----------
+FROM base AS claude
+RUN curl -fsSL https://claude.ai/install.sh | bash
+RUN cp -r /opt/nclaw-skills/* /root/.claude/skills/
+RUN echo '{"autoCompact": true}' > /root/.claude/settings.json
+
+# ---------- codex ----------
+FROM base AS codex
+RUN npm install -g @openai/codex
+RUN mkdir -p /root/.codex/skills && \
+    cp -r /root/.claude/skills/* /root/.codex/skills/ && \
+    cp -r /opt/nclaw-skills/* /root/.codex/skills/
+
+# ---------- copilot ----------
+FROM base AS copilot
+RUN npm install -g @githubnext/github-copilot-cli
+RUN mkdir -p /root/.copilot/skills && \
+    cp -r /root/.claude/skills/* /root/.copilot/skills/ && \
+    cp -r /opt/nclaw-skills/* /root/.copilot/skills/
+
+# ---------- all-in-one (default) ----------
+FROM claude AS all
+RUN npm install -g @openai/codex
+RUN npm install -g @githubnext/github-copilot-cli
+RUN mkdir -p /root/.codex/skills /root/.copilot/skills && \
+    cp -r /root/.claude/skills/* /root/.codex/skills/ && \
+    cp -r /root/.claude/skills/* /root/.copilot/skills/

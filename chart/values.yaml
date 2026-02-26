@@ -20,6 +20,8 @@ env:
   whitelistChatIds: ""
   # Base domain for webhook URLs
   webhookBaseDomain: ""
+  # CLI backend: claude, codex, or copilot (empty = image default)
+  cli: ""
 
 # Reference an existing secret for sensitive env vars
 # Secret must contain key "telegram-bot-token"
@@ -54,3 +56,11 @@ rbac:
 # Claude credentials JSON to mount into /root/.claude/credentials.json
 # Provide via secret — the key must be "credentials.json"
 claudeCredentialsSecret: ""
+
+# Codex credentials to mount into /root/.codex/auth.json
+# Provide via secret — the key must be "auth.json"
+codexCredentialsSecret: ""
+
+# Copilot credentials to mount into /root/.copilot/config.json
+# Provide via secret — the key must be "config.json"
+copilotCredentialsSecret: ""

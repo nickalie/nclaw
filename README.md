@@ -26,7 +26,7 @@
 
 ## Why NClaw
 
-There are many Claude Code assistants already — [OpenClaw](https://openclaw.ai/), [NanoClaw](https://github.com/qwibitai/nanoclaw), [ClaudeClaw](https://github.com/moazbuilds/claudeclaw), and others. NClaw exists because none of them satisfied three requirements at once:
+There are many AI assistants already — [OpenClaw](https://openclaw.ai/), [NanoClaw](https://github.com/qwibitai/nanoclaw), [ClaudeClaw](https://github.com/moazbuilds/claudeclaw), and others. NClaw exists because none of them satisfied three requirements at once:
 
 **Container-first.** NClaw is built to run in Docker and Kubernetes from day one. The repo ships a multi-stage Dockerfile and a Helm chart. No manual setup, no runtime dependency resolution — `docker run` or `helm install` and you're done.
 
@@ -60,6 +60,63 @@ The recommended way to run NClaw is inside Docker — the container serves as a 
 
 ## Docker
 
+NClaw provides four Docker images, all based on `node:24-alpine` with shared tools (git, gh CLI, Chromium, Go, Node.js, Python/uv, skills). They differ only in which CLI backend is pre-installed:
+
+| Image | Tag | CLI Backends | Size |
+|---|---|---|---|
+| **All-in-one** | `latest` | Claude Code + Codex + Copilot | Largest |
+| **Claude** | `claude` | Claude Code | Medium |
+| **Codex** | `codex` | OpenAI Codex | Medium |
+| **Copilot** | `copilot` | GitHub Copilot | Medium |
+
+All images are published to `ghcr.io/nickalie/nclaw`. The assistant can install additional packages at runtime (e.g. `apk add ffmpeg`, `pip install pandas`, `npm install -g typescript`).
+
+### Claude (default)
+
+```bash
+docker run -d --name nclaw \
+  -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
+  -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+  -e NCLAW_DATA_DIR=/app/data \
+  -v ./data:/app/data \
+  -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
+  ghcr.io/nickalie/nclaw:claude
+```
+
+Claude Code uses OAuth authentication. Mount your credentials file from `~/.claude/.credentials.json`. To obtain credentials, install Claude Code locally and run `claude login`.
+
+### Codex
+
+```bash
+docker run -d --name nclaw \
+  -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
+  -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+  -e NCLAW_DATA_DIR=/app/data \
+  -e NCLAW_CLI=codex \
+  -v ./data:/app/data \
+  -v ~/.codex/auth.json:/root/.codex/auth.json:ro \
+  ghcr.io/nickalie/nclaw:codex
+```
+
+Codex uses ChatGPT OAuth authentication. Mount your auth file from `~/.codex/auth.json`. To obtain credentials, install Codex locally (`npm install -g @openai/codex`) and sign in on first run.
+
+### Copilot
+
+```bash
+docker run -d --name nclaw \
+  -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
+  -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+  -e NCLAW_DATA_DIR=/app/data \
+  -e NCLAW_CLI=copilot \
+  -v ./data:/app/data \
+  -v ~/.copilot/config.json:/root/.copilot/config.json:ro \
+  ghcr.io/nickalie/nclaw:copilot
+```
+
+Copilot uses GitHub OAuth authentication. Mount your config file from `~/.copilot/config.json`. To obtain credentials, install Copilot CLI locally (`npm install -g @githubnext/github-copilot-cli`) and run `/login`.
+
+### All-in-one
+
 ```bash
 docker run -d --name nclaw \
   -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
@@ -69,6 +126,10 @@ docker run -d --name nclaw \
   -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
   ghcr.io/nickalie/nclaw:latest
 ```
+
+The all-in-one image includes all three CLI backends. Set `NCLAW_CLI` to `claude` (default), `codex`, or `copilot` to choose the backend. Mount the appropriate credentials for your chosen backend.
+
+### Webhooks
 
 To enable [webhooks](#webhooks), add the webhook base domain and expose the port:
 
@@ -85,10 +146,6 @@ docker run -d --name nclaw \
   ghcr.io/nickalie/nclaw:latest
 ```
 
-The Docker image is based on `node:24-alpine` and includes Claude Code, git, gh CLI, Chromium, Go, Node.js, and Python/uv. The assistant can install any additional packages at runtime as the task requires (e.g. `apk add ffmpeg`, `pip install pandas`, `npm install -g typescript`).
-
-> **Note:** The default Docker image only includes Claude Code CLI. To use Codex or Copilot backends, extend the image or install the CLI at runtime.
-
 ## Kubernetes (Helm)
 
 The Helm chart is published as an OCI artifact to GHCR.
@@ -100,11 +157,20 @@ helm install nclaw oci://ghcr.io/nickalie/charts/nclaw \
   --set claudeCredentialsSecret=my-claude-secret
 ```
 
-Create the Claude credentials secret beforehand:
+Create the credentials secret for your chosen backend:
 
 ```bash
+# Claude
 kubectl create secret generic my-claude-secret \
   --from-file=credentials.json=$HOME/.claude/.credentials.json
+
+# Codex
+kubectl create secret generic my-codex-secret \
+  --from-file=auth.json=$HOME/.codex/auth.json
+
+# Copilot
+kubectl create secret generic my-copilot-secret \
+  --from-file=config.json=$HOME/.copilot/config.json
 ```
 
 ### Helm values
@@ -117,8 +183,11 @@ kubectl create secret generic my-claude-secret \
 | `env.telegramBotToken` | `""` | Telegram bot token |
 | `env.whitelistChatIds` | `""` | Comma-separated allowed chat IDs |
 | `env.webhookBaseDomain` | `""` | Base domain for webhook URLs |
+| `env.cli` | `""` | CLI backend: `claude`, `codex`, or `copilot` (empty = image default) |
 | `existingSecret` | `""` | Use existing secret for bot token (key: `telegram-bot-token`) |
 | `claudeCredentialsSecret` | `""` | Secret with Claude credentials (key: `credentials.json`) |
+| `codexCredentialsSecret` | `""` | Secret with Codex credentials (key: `auth.json`) |
+| `copilotCredentialsSecret` | `""` | Secret with Copilot credentials (key: `config.json`) |
 | `persistence.enabled` | `true` | Enable persistent storage |
 | `persistence.size` | `1Gi` | PVC size |
 | `persistence.storageClass` | `""` | Storage class |

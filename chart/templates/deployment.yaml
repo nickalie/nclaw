@@ -78,6 +78,10 @@ spec:
             - name: NCLAW_WEBHOOK_BASE_DOMAIN
               value: {{ .Values.env.webhookBaseDomain | quote }}
             {{- end }}
+            {{- if .Values.env.cli }}
+            - name: NCLAW_CLI
+              value: {{ .Values.env.cli | quote }}
+            {{- end }}
             {{- if .Values.proxy.enabled }}
             - name: HTTP_PROXY
               value: {{ .Values.proxy.httpProxy | quote }}
@@ -95,6 +99,18 @@ spec:
             - name: data
               mountPath: /root/.config
               subPath: .config
+            {{- if .Values.codexCredentialsSecret }}
+            - name: codex-credentials
+              mountPath: /root/.codex/auth.json
+              subPath: auth.json
+              readOnly: true
+            {{- end }}
+            {{- if .Values.copilotCredentialsSecret }}
+            - name: copilot-credentials
+              mountPath: /root/.copilot/config.json
+              subPath: config.json
+              readOnly: true
+            {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
@@ -110,4 +126,20 @@ spec:
             items:
               - key: credentials.json
                 path: credentials.json
+        {{- end }}
+        {{- if .Values.codexCredentialsSecret }}
+        - name: codex-credentials
+          secret:
+            secretName: {{ .Values.codexCredentialsSecret }}
+            items:
+              - key: auth.json
+                path: auth.json
+        {{- end }}
+        {{- if .Values.copilotCredentialsSecret }}
+        - name: copilot-credentials
+          secret:
+            secretName: {{ .Values.copilotCredentialsSecret }}
+            items:
+              - key: config.json
+                path: config.json
         {{- end }}

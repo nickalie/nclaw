@@ -5,7 +5,7 @@ Telegram bot that wraps AI coding CLIs (Claude Code, OpenAI Codex, GitHub Copilo
 ## Architecture
 
 ```
-Telegram -> Handler  -\
+Telegram ----------->\
 Scheduler ------------>  CLI Backend (cli.Provider) -> Pipeline.Process() -> Telegram
 Webhook  ----------->/
 ```
@@ -81,10 +81,13 @@ Optional:
 ## Commands
 
 ```
-make run     # go run ./cmd/nclaw
-make lint    # golangci-lint run ./...
-make test    # CGO_ENABLED=1 go test ./...
-make docker  # Build and run in Docker
+make run             # go run ./cmd/nclaw
+make lint            # golangci-lint run ./...
+make test            # CGO_ENABLED=1 go test ./...
+make docker          # Build and run all-in-one image
+make docker-claude   # Build Claude-only image
+make docker-codex    # Build Codex-only image
+make docker-copilot  # Build Copilot-only image
 ```
 
 ## Code Style
@@ -114,7 +117,7 @@ GitHub Actions pipeline (`.github/workflows/ci.yml`):
 2. **Test** - `go test -v ./...`
 3. **Release** - GoReleaser cross-compilation (on tag push)
 4. **Chocolatey** - Build and push `.nupkg` to Chocolatey (on tag push, Windows runner)
-5. **Docker** - Build and push to GHCR on push to main or tagged releases
+5. **Docker** - Build and push 4 image variants to GHCR on push to main or tagged releases (matrix strategy)
 6. **Helm** - Push Helm chart to GHCR OCI registry (on tag push)
 7. **Publish** - Promote draft release to published (after all jobs pass)
 
@@ -123,4 +126,11 @@ The nuspec is generated inline in the CI workflow. It must include: `title` (dis
 
 ## Docker
 
-The runtime image (`node:24-alpine` based) includes Claude Code, Go, git, gh CLI, Chromium, and Python/uv. Claude Code skills (`schedule`, `send-file`, `webhook`) are copied into the global skills directory. Codex and Copilot CLIs are not pre-installed; to use those backends in Docker, the image must be extended or the CLI installed at runtime.
+A single `docker/Dockerfile` uses multi-stage targets to produce 4 image variants. A shared `base` stage contains all common tools (git, gh CLI, Chromium, Go, Python/uv, skills); each variant adds only its CLI backend:
+
+- `--target all` — All-in-one: Claude Code + Codex + Copilot (tagged `latest`)
+- `--target claude` — Claude Code only (tagged `claude`)
+- `--target codex` — OpenAI Codex only (tagged `codex`)
+- `--target copilot` — GitHub Copilot only (tagged `copilot`)
+
+CI builds and pushes all four variants to GHCR using a matrix strategy. Custom nclaw skills (`schedule`, `send-file`, `webhook`) and third-party skills are included in all variants.
