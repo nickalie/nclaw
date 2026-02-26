@@ -37,18 +37,31 @@ func parseStreamJSONOutput(output []byte) *cli.Result {
 	return &cli.Result{Text: lastMessage, FullText: fullText}
 }
 
-// collectAssistantMessages scans NDJSON lines for message events
-// with role "assistant" and returns their content.
+// collectAssistantMessages scans NDJSON lines and groups consecutive assistant
+// message events into logical messages. Gemini may emit multiple "message" chunks
+// for a single assistant turn; these are concatenated. A new logical message starts
+// when a non-assistant event (tool_use, tool_result, etc.) appears between assistant events.
 func collectAssistantMessages(output []byte) []string {
 	scanner := bufio.NewScanner(bytes.NewReader(output))
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	var messages []string
+	var current strings.Builder
 
 	for scanner.Scan() {
-		if text := extractAssistantContent(scanner.Bytes()); text != "" {
-			messages = append(messages, text)
+		line := scanner.Bytes()
+		text := extractAssistantContent(line)
+
+		if text != "" {
+			current.WriteString(text)
+		} else if current.Len() > 0 && isNonAssistantEvent(line) {
+			messages = append(messages, current.String())
+			current.Reset()
 		}
+	}
+
+	if current.Len() > 0 {
+		messages = append(messages, current.String())
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -56,6 +69,26 @@ func collectAssistantMessages(output []byte) []string {
 	}
 
 	return messages
+}
+
+// isNonAssistantEvent returns true if the line is a valid NDJSON event that is
+// not an assistant message (e.g. tool_use, tool_result, user message).
+// Empty lines and malformed JSON return false to avoid splitting on noise.
+func isNonAssistantEvent(line []byte) bool {
+	if len(line) == 0 {
+		return false
+	}
+
+	var event streamEvent
+	if err := json.Unmarshal(line, &event); err != nil {
+		return false
+	}
+
+	if event.Type == "" {
+		return false
+	}
+
+	return event.Type != "message" || event.Role != "assistant"
 }
 
 // extractAssistantContent parses a single NDJSON line and returns the assistant
