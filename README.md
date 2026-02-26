@@ -8,7 +8,7 @@
 - [How It Works](#how-it-works)
 - [Features](#features)
 - [Docker](#docker)
-- [Multi-Model](#multi-model)
+- [Multi-Model](#multi-model-1)
 - [Kubernetes (Helm)](#kubernetes-helm)
 - [Running without Docker](#running-without-docker)
   - [Installation](#installation)
@@ -111,7 +111,7 @@ docker run -d --name nclaw \
   ghcr.io/nickalie/nclaw:multi-model
 ```
 
-Setting `NCLAW_MODEL` automatically selects the multi-model backend. No Anthropic credentials are needed — only an API key from your chosen provider. See [Multi-Model](#multi-model) for full configuration details.
+Setting `NCLAW_MODEL` automatically selects the multi-model backend. No Anthropic credentials are needed — only an API key from your chosen provider. See [Multi-Model](#multi-model-1) for full configuration details.
 
 ### Codex
 
@@ -184,7 +184,7 @@ NClaw's multi-model backend (powered by [claudish](https://github.com/MadAppGang
 |---|---|---|---|
 | **OpenRouter** | `or@` | `or@deepseek/deepseek-r1` | `OPENROUTER_API_KEY` |
 | **Google Gemini** | `g@` | `g@gemini-2.0-flash` | `GEMINI_API_KEY` |
-| **OpenAI** | `oai@` | `oai@gpt-4o` | `OPENAI_API_KEY` |
+| **OpenAI** | `oai@` | `oai@o3-mini` | `OPENAI_API_KEY` |
 | **Vertex AI** | `v@` | `v@gemini-2.5-flash` | `VERTEX_API_KEY` |
 | **OllamaCloud** | `oc@` | `oc@llama-3.1-70b` | `OLLAMA_API_KEY` |
 | **Kimi** | `kimi@` | `kimi@kimi-k2` | `MOONSHOT_API_KEY` |
@@ -199,7 +199,7 @@ NClaw's multi-model backend (powered by [claudish](https://github.com/MadAppGang
 | **vLLM** | `vllm@` | `vllm@mistral-7b` | Local (no key) |
 | **MLX** | `mlx@` | `mlx@llama-3.2-3b` | Local (no key) |
 
-Well-known model names (e.g. `gpt-4o`, `gemini-2.0-flash`) are auto-detected without a provider prefix.
+Well-known model names (e.g. `gemini-2.0-flash`, `llama-3.1-70b`) are auto-detected without a provider prefix.
 
 ### Model Selection
 
@@ -207,32 +207,32 @@ Set `NCLAW_MODEL` to choose the default model. This automatically selects the mu
 
 ```bash
 # Use Gemini via direct API
-export NCLAW_MODEL=g@gemini-2.5-pro
-export GEMINI_API_KEY=your-key
+docker run -d --name nclaw \
+  -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
+  -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+  -e NCLAW_DATA_DIR=/app/data \
+  -e NCLAW_MODEL=g@gemini-2.5-pro \
+  -e GEMINI_API_KEY=your-key \
+  -v ./data:/app/data \
+  ghcr.io/nickalie/nclaw:multi-model
 
-# Use GPT-4o via OpenAI
-export NCLAW_MODEL=oai@gpt-4o
-export OPENAI_API_KEY=your-key
+# Use GLM-4 via Z.AI
+docker run -d --name nclaw \
+  -e NCLAW_MODEL=zai@glm-4 \
+  -e ZAI_API_KEY=your-key \
+  ...
 
 # Use any model via OpenRouter
-export NCLAW_MODEL=or@anthropic/claude-sonnet-4
-export OPENROUTER_API_KEY=your-key
+docker run -d --name nclaw \
+  -e NCLAW_MODEL=or@mistralai/mistral-large \
+  -e OPENROUTER_API_KEY=your-key \
+  ...
 
 # Use a local model via Ollama
-export NCLAW_MODEL=ollama@llama3.2
+docker run -d --name nclaw \
+  -e NCLAW_MODEL=ollama@llama3.2 \
+  ...
 ```
-
-### Model Tier Overrides
-
-The CLI internally uses different model tiers (Opus, Sonnet, Haiku) for different tasks. You can override which model is used for each tier:
-
-| Variable | Purpose |
-|---|---|
-| `NCLAW_MODEL` | Default model for all requests |
-| `NCLAW_MODEL_OPUS` | Override for Opus-tier tasks (complex reasoning) |
-| `NCLAW_MODEL_SONNET` | Override for Sonnet-tier tasks (general coding) |
-| `NCLAW_MODEL_HAIKU` | Override for Haiku-tier tasks (quick operations) |
-| `NCLAW_MODEL_SUBAGENT` | Override for subagent tasks |
 
 ### Local Models
 
@@ -242,8 +242,15 @@ For fully offline operation, use Ollama or LM Studio. Your code never leaves you
 # Start Ollama and pull a model
 ollama pull llama3.2
 
-# Configure nclaw to use it
-export NCLAW_MODEL=ollama@llama3.2
+# Run nclaw with a local model
+docker run -d --name nclaw \
+  -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
+  -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+  -e NCLAW_DATA_DIR=/app/data \
+  -e NCLAW_MODEL=ollama@llama3.2 \
+  -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
+  -v ./data:/app/data \
+  ghcr.io/nickalie/nclaw:multi-model
 ```
 
 Set `OLLAMA_BASE_URL`, `LMSTUDIO_BASE_URL`, `VLLM_BASE_URL`, or `MLX_BASE_URL` to connect to custom endpoints.
@@ -287,10 +294,6 @@ kubectl create secret generic my-copilot-secret \
 | `env.webhookBaseDomain` | `""` | Base domain for webhook URLs |
 | `env.cli` | `""` | CLI backend: `claude`, `claudish` (multi-model), `codex`, or `copilot` (empty = image default) |
 | `env.model` | `""` | Model for multi-model backend (e.g. `g@gemini-2.5-pro`). Setting this auto-selects multi-model |
-| `env.modelOpus` | `""` | Opus-tier model override |
-| `env.modelSonnet` | `""` | Sonnet-tier model override |
-| `env.modelHaiku` | `""` | Haiku-tier model override |
-| `env.modelSubagent` | `""` | Subagent model override |
 | `existingSecret` | `""` | Use existing secret for bot token (key: `telegram-bot-token`) |
 | `claudeCredentialsSecret` | `""` | Secret with Claude credentials (key: `credentials.json`) |
 | `codexCredentialsSecret` | `""` | Secret with Codex credentials (key: `auth.json`) |
@@ -408,11 +411,7 @@ NClaw variables use the `NCLAW_` prefix. Provider API keys use the provider's na
 | `NCLAW_TELEGRAM_BOT_TOKEN` | Yes | — | Telegram bot token from [@BotFather](https://t.me/BotFather) |
 | `NCLAW_DATA_DIR` | Yes | — | Base directory for session data and files |
 | `NCLAW_CLI` | No | `claude` | CLI backend: `claude`, `claudish` (multi-model), `codex`, or `copilot`. Auto-selects `claudish` when `NCLAW_MODEL` is set |
-| `NCLAW_MODEL` | No | — | Model for multi-model backend (e.g. `g@gemini-2.5-pro`, `oai@gpt-4o`). Setting this auto-selects multi-model |
-| `NCLAW_MODEL_OPUS` | No | — | Opus-tier model override |
-| `NCLAW_MODEL_SONNET` | No | — | Sonnet-tier model override |
-| `NCLAW_MODEL_HAIKU` | No | — | Haiku-tier model override |
-| `NCLAW_MODEL_SUBAGENT` | No | — | Subagent model override |
+| `NCLAW_MODEL` | No | — | Model for multi-model backend (e.g. `g@gemini-2.5-pro`). Setting this auto-selects multi-model |
 | `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | No | — | Comma-separated list of allowed Telegram chat IDs. If unset, accepts all chats (with a security warning) |
 | `NCLAW_DB_PATH` | No | `{data_dir}/nclaw.db` | Path to the SQLite database |
 | `NCLAW_TIMEZONE` | No | system local | Timezone for the scheduler (e.g. `Europe/Berlin`) |
@@ -436,12 +435,7 @@ db_path: "/app/data/nclaw.db"
 timezone: "Europe/Berlin"
 
 # Multi-model settings (setting model auto-selects multi-model backend)
-model: ""                  # e.g. "g@gemini-2.5-pro", "oai@gpt-4o"
-model_opus: ""             # Opus-tier override
-model_sonnet: ""           # Sonnet-tier override
-model_haiku: ""            # Haiku-tier override
-model_subagent: ""         # Subagent model override
-
+model: ""                  # e.g. "g@gemini-2.5-pro", "or@mistralai/mistral-large"
 # Provider API keys are set as regular env vars (not in this file):
 # OPENROUTER_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, etc.
 
