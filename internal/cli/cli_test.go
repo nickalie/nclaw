@@ -9,9 +9,9 @@ import (
 
 // mockClient is a test mock that satisfies cli.Client.
 type mockClient struct {
-	dir         string
-	skipPerms   bool
-	systemPromt string
+	dir          string
+	skipPerms    bool
+	systemPrompt string
 }
 
 var _ cli.Client = (*mockClient)(nil)
@@ -27,7 +27,7 @@ func (m *mockClient) SkipPermissions() cli.Client {
 }
 
 func (m *mockClient) AppendSystemPrompt(prompt string) cli.Client {
-	m.systemPromt = prompt
+	m.systemPrompt = prompt
 	return m
 }
 
