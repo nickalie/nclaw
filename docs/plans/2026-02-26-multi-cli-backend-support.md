@@ -58,9 +58,9 @@ Key design decisions:
 **Files:**
 - Create: `internal/cli/cli.go`
 
-- [ ] Define `Result` struct, `Client` interface, and `Provider` interface
-- [ ] Add compile-time interface satisfaction checks (to be used by implementations)
-- [ ] Run project test suite - must pass before task 2
+- [x] Define `Result` struct, `Client` interface, and `Provider` interface
+- [x] Add compile-time interface satisfaction checks (to be used by implementations)
+- [x] Run project test suite - must pass before task 2
 
 ### Task 2: Refactor Claude package to implement CLI interfaces
 
