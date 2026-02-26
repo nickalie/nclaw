@@ -1,6 +1,6 @@
 # nclaw
 
-**N**Claw — a**N**other Claw. A lightweight, container-first AI coding assistant accessible through Telegram. Supports Claude Code (default), 580+ models via multi-model backend (OpenRouter, Gemini, OpenAI, Ollama, and more), OpenAI Codex, and GitHub Copilot as CLI backends. Written in Go.
+**N**Claw — a**N**other Claw. A lightweight, container-first AI coding assistant accessible through Telegram. Supports Claude Code (default), 580+ models via multi-model backend (OpenRouter, Gemini, OpenAI, Ollama, and more), OpenAI Codex, and GitHub Copilot as CLI agents. Written in Go.
 
 ## Table of Contents
 
@@ -33,11 +33,11 @@ There are many AI assistants already — [OpenClaw](https://openclaw.ai/), [Nano
 
 **Lightweight.** A single Go binary. Idles at ~10 MB of RAM. No runtime interpreter, no package manager overhead, no garbage collection pauses that matter.
 
-**Telegram topics as projects.** NClaw treats each Telegram topic (thread) as a separate Claude Code session with its own working directory. One group chat with topics becomes a multi-project workspace — each topic gets isolated context, history, and files.
+**Telegram topics as projects.** NClaw treats each Telegram topic (thread) as a separate session with its own working directory. One group chat with topics becomes a multi-project workspace — each topic gets isolated context, history, and files.
 
 ## How It Works
 
-You message the assistant through Telegram. It invokes the configured CLI backend (Claude Code by default), preserving conversation history per chat/topic, and sends back the response.
+You message the assistant through Telegram. It invokes the configured CLI agent (Claude Code by default), preserving conversation history per chat/topic, and sends back the response.
 
 ```
 Telegram  -\
@@ -45,23 +45,23 @@ Scheduler -->  CLI Backend  -->  Telegram
 Webhook   -/
 ```
 
-The recommended way to run NClaw is inside Docker — the container serves as a security sandbox, and the image ships with all the tools the assistant might need. However, NClaw is a regular executable and can run directly on any machine with the chosen CLI backend installed.
+The recommended way to run NClaw is inside Docker — the container serves as a security sandbox, and the image ships with all the tools the assistant might need. However, NClaw is a regular executable and can run directly on any machine with the chosen CLI agent installed.
 
 ## Features
 
-- **Session persistence** — Each chat/topic maintains its own Claude session. Pick up where you left off.
+- **Session persistence** — Each chat/topic maintains its own session. Pick up where you left off.
 - **Telegram topics** — Each topic in a group chat is a separate project with isolated context and files.
-- **File attachments** — Send photos, documents, audio, video to Claude.
-- **File delivery** — Claude can send files back to you (generated reports, exports, code).
+- **File attachments** — Send photos, documents, audio, video to the assistant.
+- **File delivery** — The assistant can send files back to you (generated reports, exports, code).
 - **Scheduled tasks** — Create recurring or one-time jobs using natural language.
-- **Webhooks** — Register HTTP endpoints that forward incoming requests to Claude in your chat.
+- **Webhooks** — Register HTTP endpoints that forward incoming requests to the assistant in your chat.
 - **Rich runtime** — Docker image includes git, gh CLI, Chromium, Go, Node.js, Python/uv. The assistant can install additional packages on the fly as needed — for example, `apk add ffmpeg` to process video, `npm install -g prettier` to format code, or `pip install pandas` to analyze data.
-- **Multiple CLI backends** — Supports Claude Code (default), multi-model (580+ models via OpenRouter, Gemini, OpenAI, Ollama, etc.), OpenAI Codex, and GitHub Copilot. Switch backends via the `NCLAW_CLI` environment variable.
+- **Multiple CLI agents** — Supports Claude Code (default), multi-model (580+ models via OpenRouter, Gemini, OpenAI, Ollama, etc.), OpenAI Codex, and GitHub Copilot. Switch agents via the `NCLAW_CLI` environment variable.
 - **HTML-formatted replies** — Responses render using Telegram's HTML formatting with plain-text fallback.
 
 ## Docker
 
-NClaw provides five Docker images, all based on `node:24-alpine` with shared tools (git, gh CLI, Chromium, Go, Node.js, Python/uv, skills). They differ only in which CLI backend is pre-installed:
+NClaw provides five Docker images, all based on `node:24-alpine` with shared tools (git, gh CLI, Chromium, Go, Node.js, Python/uv, skills). They differ only in which CLI agent is pre-installed:
 
 | Image | Tag | CLI Backends | Size |
 |---|---|---|---|
@@ -155,7 +155,7 @@ docker run -d --name nclaw \
   ghcr.io/nickalie/nclaw:latest
 ```
 
-The all-in-one image includes all four CLI backends. Set `NCLAW_CLI` to `claude` (default), `claudish` (multi-model), `codex`, or `copilot` to choose the backend. Mount the appropriate credentials for your chosen backend.
+The all-in-one image includes all four CLI agents. Set `NCLAW_CLI` to `claude` (default), `claudish` (multi-model), `codex`, or `copilot` to choose the agent. Mount the appropriate credentials for your chosen agent.
 
 ### Webhooks
 
@@ -266,7 +266,7 @@ helm install nclaw oci://ghcr.io/nickalie/charts/nclaw \
   --set claudeCredentialsSecret=my-claude-secret
 ```
 
-Create the credentials secret for your chosen backend:
+Create the credentials secret for your chosen agent:
 
 ```bash
 # Claude
@@ -292,7 +292,7 @@ kubectl create secret generic my-copilot-secret \
 | `env.telegramBotToken` | `""` | Telegram bot token |
 | `env.whitelistChatIds` | `""` | Comma-separated allowed chat IDs |
 | `env.webhookBaseDomain` | `""` | Base domain for webhook URLs |
-| `env.cli` | `""` | CLI backend: `claude`, `claudish` (multi-model), `codex`, or `copilot` (empty = image default) |
+| `env.cli` | `""` | CLI agent: `claude`, `claudish` (multi-model), `codex`, or `copilot` (empty = image default) |
 | `env.model` | `""` | Model for multi-model backend (e.g. `g@gemini-2.5-pro`). Setting this auto-selects multi-model |
 | `existingSecret` | `""` | Use existing secret for bot token (key: `telegram-bot-token`) |
 | `claudeCredentialsSecret` | `""` | Secret with Claude credentials (key: `credentials.json`) |
@@ -314,9 +314,9 @@ kubectl create secret generic my-copilot-secret \
 
 ## Running without Docker
 
-NClaw is a regular executable and can run directly on any machine. The only runtime dependency is the CLI for your chosen backend — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default), [claudish](https://github.com/MadAppGang/claudish) (multi-model), [OpenAI Codex](https://github.com/openai/codex), or [GitHub Copilot](https://docs.github.com/en/copilot/github-copilot-in-the-cli) — it must be installed and available in `PATH`.
+NClaw is a regular executable and can run directly on any machine. The only runtime dependency is the CLI for your chosen agent — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default), [claudish](https://github.com/MadAppGang/claudish) (multi-model), [OpenAI Codex](https://github.com/openai/codex), or [GitHub Copilot](https://docs.github.com/en/copilot/github-copilot-in-the-cli) — it must be installed and available in `PATH`.
 
-> **Security notice:** Without Docker, Claude Code runs directly on the host with the same permissions as the nclaw process. It has full access to the file system, network, and any credentials available to the user. Run under a dedicated unprivileged user and avoid running as root. For production use, Docker or Kubernetes deployment is strongly recommended.
+> **Security notice:** Without Docker, the CLI agent runs directly on the host with the same permissions as the nclaw process. It has full access to the file system, network, and any credentials available to the user. Run under a dedicated unprivileged user and avoid running as root. For production use, Docker or Kubernetes deployment is strongly recommended.
 
 ### Installation
 
@@ -410,7 +410,7 @@ NClaw variables use the `NCLAW_` prefix. Provider API keys use the provider's na
 |---|---|---|---|
 | `NCLAW_TELEGRAM_BOT_TOKEN` | Yes | — | Telegram bot token from [@BotFather](https://t.me/BotFather) |
 | `NCLAW_DATA_DIR` | Yes | — | Base directory for session data and files |
-| `NCLAW_CLI` | No | `claude` | CLI backend: `claude`, `claudish` (multi-model), `codex`, or `copilot`. Auto-selects `claudish` when `NCLAW_MODEL` is set |
+| `NCLAW_CLI` | No | `claude` | CLI agent: `claude`, `claudish` (multi-model), `codex`, or `copilot`. Auto-selects `claudish` when `NCLAW_MODEL` is set |
 | `NCLAW_MODEL` | No | — | Model for multi-model backend (e.g. `g@gemini-2.5-pro`). Setting this auto-selects multi-model |
 | `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | No | — | Comma-separated list of allowed Telegram chat IDs. If unset, accepts all chats (with a security warning) |
 | `NCLAW_DB_PATH` | No | `{data_dir}/nclaw.db` | Path to the SQLite database |
@@ -418,7 +418,7 @@ NClaw variables use the `NCLAW_` prefix. Provider API keys use the provider's na
 | `NCLAW_WEBHOOK_BASE_DOMAIN` | No | — | Base domain for webhook URLs (required when using webhooks) |
 | `NCLAW_WEBHOOK_PORT` | No | `:3000` | Webhook HTTP server listen address |
 
-> **Security notice:** If `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` is not set, the assistant will accept messages from **any** Telegram chat. Since NClaw runs Claude Code with full tool access (file system, shell, network), this effectively gives anyone who discovers your bot unrestricted access to the host environment. Always set this variable in production.
+> **Security notice:** If `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` is not set, the assistant will accept messages from **any** Telegram chat. Since NClaw runs the CLI agent with full tool access (file system, shell, network), this effectively gives anyone who discovers your bot unrestricted access to the host environment. Always set this variable in production.
 
 ### Config file
 
@@ -458,7 +458,7 @@ Tasks persist across restarts. Each task can either continue the existing chat s
 
 ## Webhooks
 
-Register HTTP endpoints that forward incoming requests to Claude:
+Register HTTP endpoints that forward incoming requests to the assistant:
 
 ```
 Create a webhook that receives GitHub push events and summarizes the changes
@@ -466,7 +466,7 @@ Set up a webhook for my package tracking updates
 Listen for smart home alerts and notify me about unusual activity
 ```
 
-When an external service calls the webhook URL, the request (method, headers, query params, body) is forwarded to Claude in the originating chat. The HTTP endpoint returns 200 immediately; Claude processes the request asynchronously. Webhooks persist across restarts.
+When an external service calls the webhook URL, the request (method, headers, query params, body) is forwarded to the assistant in the originating chat. The HTTP endpoint returns 200 immediately; the assistant processes the request asynchronously. Webhooks persist across restarts.
 
 Requires `NCLAW_WEBHOOK_BASE_DOMAIN` to be set. Webhook URLs follow the pattern `https://{BASE_DOMAIN}/webhooks/{UUID}`.
 
@@ -478,7 +478,7 @@ Six skills ship with nclaw:
 |---|---|---|
 | `schedule` | Custom | Create and manage scheduled tasks via natural language |
 | `send-file` | Custom | Send generated files back to the user via Telegram |
-| `webhook` | Custom | Register HTTP endpoints that forward requests to Claude |
+| `webhook` | Custom | Register HTTP endpoints that forward requests to the assistant |
 | `find-skills` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Discover and install additional agent skills |
 | `skill-creator` | [anthropics/skills](https://github.com/anthropics/skills) | Guide for creating new custom skills |
 | `agent-browser` | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) | Browse the web using system Chromium |
