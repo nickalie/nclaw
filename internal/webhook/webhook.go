@@ -160,6 +160,10 @@ func (m *Manager) processIncoming(wh *model.WebhookRegistration, req IncomingReq
 
 	result, cliErr := m.callCLI(wh, req)
 
+	if result == nil {
+		result = &cli.Result{}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -186,9 +190,8 @@ func (m *Manager) callCLI(wh *model.WebhookRegistration, req IncomingRequest) (*
 	result, err := m.provider.NewClient().Dir(dir).SkipPermissions().AppendSystemPrompt(telegram.Prompt).Continue(prompt)
 	if err != nil {
 		log.Printf("webhook: %s error for %s: %v", m.provider.Name(), wh.ID, err)
-		if result.Text == "" {
-			result.Text = "Webhook processing failed"
-			result.FullText = "Webhook processing failed"
+		if result == nil || result.Text == "" {
+			result = &cli.Result{Text: "Webhook processing failed", FullText: "Webhook processing failed"}
 		}
 	}
 

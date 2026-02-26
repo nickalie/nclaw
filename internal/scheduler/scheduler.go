@@ -265,6 +265,10 @@ func (s *Scheduler) executeTask(taskID string) {
 	result, runErr := s.invokeCLI(task, dir, prompt)
 	duration := time.Since(start)
 
+	if result == nil {
+		result = &cli.Result{}
+	}
+
 	if runErr != nil {
 		log.Printf("scheduler: task %s failed after %s: %v", taskID, duration, runErr)
 	} else {

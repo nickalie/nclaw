@@ -69,6 +69,9 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	unlock()
 	stopTyping()
 
+	if result == nil {
+		result = &cli.Result{}
+	}
 	h.Pipeline.Process(ctx, result, cliErr, chatID, threadID, dir)
 }
 
@@ -144,7 +147,7 @@ func (h *Handler) callCLI(dir, prompt string, chatID int64, threadID int) (*cli.
 
 	if err != nil {
 		log.Printf("handler: %s error: %v", h.Provider.Name(), err)
-		if result.Text == "" {
+		if result == nil || result.Text == "" {
 			result = &cli.Result{Text: "error: " + err.Error(), FullText: "error: " + err.Error()}
 		}
 	}
