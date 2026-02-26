@@ -136,11 +136,11 @@ CLI mapping:
 - Output: plain text via `-s` flag; `Text == FullText`
 - Known limitation: no structured output, so command blocks in intermediate messages are not captured
 
-- [ ] Create `Copilot` struct implementing `cli.Client` with go-binwrapper
-- [ ] Create `Provider` struct implementing `cli.Provider` (PreInvoke is no-op)
-- [ ] Write tests for command argument construction
-- [ ] Write tests for plain text output parsing
-- [ ] Run project test suite - must pass before task 6
+- [x] Create `Copilot` struct implementing `cli.Client` with go-binwrapper
+- [x] Create `Provider` struct implementing `cli.Provider` (PreInvoke is no-op)
+- [x] Write tests for command argument construction
+- [x] Write tests for plain text output parsing
+- [x] Run project test suite - must pass before task 6
 
 ### Task 6: Add CLI backend configuration and provider selection
 
