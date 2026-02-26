@@ -38,11 +38,11 @@ Add Google's Gemini CLI (`gemini`) as a new CLI backend, following the same prov
 **Files:**
 - Create: `internal/cli/gemini/result.go`
 
-- [ ] Define Go structs for Gemini's stream-json event types (message events with role/content, result event with status)
-- [ ] Implement `parseStreamJSONOutput(output []byte) *cli.Result` that scans NDJSON lines, collects assistant message content into FullText, and extracts the final assistant message as Text
-- [ ] Handle edge cases: empty output, no assistant messages, malformed JSON lines (skip gracefully)
-- [ ] Write tests for the parser
-- [ ] Run project test suite - must pass before task 2
+- [x] Define Go structs for Gemini's stream-json event types (message events with role/content, result event with status)
+- [x] Implement `parseStreamJSONOutput(output []byte) *cli.Result` that scans NDJSON lines, collects assistant message content into FullText, and extracts the final assistant message as Text
+- [x] Handle edge cases: empty output, no assistant messages, malformed JSON lines (skip gracefully)
+- [x] Write tests for the parser
+- [x] Run project test suite - must pass before task 2
 
 ### Task 2: Create Gemini client and provider
 
