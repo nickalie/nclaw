@@ -16,7 +16,9 @@ import (
 
 	"github.com/nickalie/nclaw/internal/claude"
 	"github.com/nickalie/nclaw/internal/cli"
+	"github.com/nickalie/nclaw/internal/codex"
 	"github.com/nickalie/nclaw/internal/config"
+	"github.com/nickalie/nclaw/internal/copilot"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/handler"
 	"github.com/nickalie/nclaw/internal/pipeline"
@@ -50,7 +52,10 @@ func main() {
 	}
 
 	// Create CLI provider and verify it's available before starting.
-	provider := claude.NewProvider()
+	provider, err := newProvider(config.CLI())
+	if err != nil {
+		log.Fatal(err)
+	}
 	cliVer, err := provider.Version()
 	if err != nil {
 		log.Fatalf("%s cli not found: %v", provider.Name(), err)
@@ -135,7 +140,13 @@ func hasFlag(flags ...string) bool {
 
 func printVersion() error {
 	fmt.Printf("nclaw %s\n", version.String())
-	provider := claude.NewProvider()
+	// Best-effort: show CLI version if config is available.
+	_ = config.Init()
+	provider, err := newProvider(config.CLI())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cli: %v\n", err)
+		return err
+	}
 	v, err := provider.Version()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: error: %v\n", provider.Name(), err)
@@ -143,6 +154,19 @@ func printVersion() error {
 	}
 	fmt.Printf("%s: %s\n", provider.Name(), v)
 	return nil
+}
+
+func newProvider(backend string) (cli.Provider, error) {
+	switch backend {
+	case "claude":
+		return claude.NewProvider(), nil
+	case "codex":
+		return codex.NewProvider(), nil
+	case "copilot":
+		return copilot.NewProvider(), nil
+	default:
+		return nil, fmt.Errorf("unsupported cli backend %q (valid: %v)", backend, config.ValidCLIBackends())
+	}
 }
 
 func sendStartupNotifications(b *bot.Bot) {

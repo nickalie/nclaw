@@ -148,13 +148,13 @@ CLI mapping:
 - Modify: `internal/config/config.go`
 - Modify: `cmd/nclaw/main.go`
 
-- [ ] Add `CLI()` function to config returning backend name (default: `"claude"`; valid: `"claude"`, `"codex"`, `"copilot"`)
-- [ ] Support via `NCLAW_CLI` env var or `cli` key in config.yaml
-- [ ] Create provider factory function in `main.go` selecting the appropriate `cli.Provider`
-- [ ] Fail startup with clear error if CLI binary is not found for the selected backend
-- [ ] Update startup log to show active CLI backend and version
-- [ ] Write tests for config `CLI()` function
-- [ ] Run project test suite - must pass before task 7
+- [x] Add `CLI()` function to config returning backend name (default: `"claude"`; valid: `"claude"`, `"codex"`, `"copilot"`)
+- [x] Support via `NCLAW_CLI` env var or `cli` key in config.yaml
+- [x] Create provider factory function in `main.go` selecting the appropriate `cli.Provider`
+- [x] Fail startup with clear error if CLI binary is not found for the selected backend
+- [x] Update startup log to show active CLI backend and version
+- [x] Write tests for config `CLI()` function
+- [x] Run project test suite - must pass before task 7
 
 ### Task 7: Verify acceptance criteria
 

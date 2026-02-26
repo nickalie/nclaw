@@ -109,3 +109,28 @@ func TestWebhookPort_Override(t *testing.T) {
 
 	assert.Equal(t, ":8080", WebhookPort())
 }
+
+func TestCLI_Default(t *testing.T) {
+	viper.Reset()
+
+	assert.Equal(t, "claude", CLI())
+}
+
+func TestCLI_Configured(t *testing.T) {
+	viper.Set("cli", "codex")
+	defer viper.Reset()
+
+	assert.Equal(t, "codex", CLI())
+}
+
+func TestCLI_CaseInsensitive(t *testing.T) {
+	viper.Set("cli", "COPILOT")
+	defer viper.Reset()
+
+	assert.Equal(t, "copilot", CLI())
+}
+
+func TestValidCLIBackends(t *testing.T) {
+	backends := ValidCLIBackends()
+	assert.Equal(t, []string{"claude", "codex", "copilot"}, backends)
+}
