@@ -296,6 +296,10 @@ kubectl create secret generic my-codex-secret \
 # Copilot
 kubectl create secret generic my-copilot-secret \
   --from-file=config.json=$HOME/.copilot/config.json
+
+# Gemini (API key — inject via claudishApiKeysSecret)
+kubectl create secret generic my-gemini-secret \
+  --from-literal=GEMINI_API_KEY=your-gemini-key
 ```
 
 ### Helm values

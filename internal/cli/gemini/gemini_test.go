@@ -48,7 +48,6 @@ func TestNew_DefaultFields(t *testing.T) {
 	assert.Equal(t, "", g.dir)
 	assert.Equal(t, "", g.systemPrompt)
 	assert.False(t, g.skipPermissions)
-	assert.Equal(t, "", g.model)
 }
 
 func TestPrepare_AskArgs(t *testing.T) {
@@ -109,26 +108,6 @@ func TestPrepareContinue_NoSkipPermissions(t *testing.T) {
 	assert.Contains(t, args, "-p")
 	assert.NotContains(t, args, "--approval-mode")
 	assert.NotContains(t, args, "yolo")
-}
-
-func TestPrepare_WithModel(t *testing.T) {
-	g := New()
-	g.model = "gemini-2.5-pro"
-
-	g.prepare()
-
-	args := g.bin.Args()
-	assert.Contains(t, args, "--model")
-	assert.Contains(t, args, "gemini-2.5-pro")
-}
-
-func TestPrepare_WithoutModel(t *testing.T) {
-	g := New()
-
-	g.prepare()
-
-	args := g.bin.Args()
-	assert.NotContains(t, args, "--model")
 }
 
 func TestPrepare_ResetsBetweenCalls(t *testing.T) {

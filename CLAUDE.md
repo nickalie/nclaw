@@ -1,6 +1,6 @@
 # nclaw
 
-Telegram bot that wraps AI coding CLIs (Claude Code, OpenAI Codex, GitHub Copilot). Users message a Telegram bot, which invokes the configured CLI backend in a Docker container and returns the response. Each chat/thread gets its own persistent session.
+Telegram bot that wraps AI coding CLIs (Claude Code, OpenAI Codex, GitHub Copilot, Google Gemini). Users message a Telegram bot, which invokes the configured CLI backend in a Docker container and returns the response. Each chat/thread gets its own persistent session.
 
 ## Architecture
 

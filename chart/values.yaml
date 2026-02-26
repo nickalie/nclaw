@@ -20,7 +20,7 @@ env:
   whitelistChatIds: ""
   # Base domain for webhook URLs
   webhookBaseDomain: ""
-  # CLI backend: claude, claudish, codex, or copilot (empty = image default)
+  # CLI backend: claude, claudish, codex, copilot, or gemini (empty = image default)
   cli: ""
   # Model for claudish (e.g. g@gemini-2.5-pro). Setting this auto-selects claudish
   model: ""

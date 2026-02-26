@@ -19,7 +19,6 @@ type Gemini struct {
 	dir             string
 	systemPrompt    string
 	skipPermissions bool
-	model           string
 }
 
 // New creates a new Gemini CLI wrapper.
@@ -129,10 +128,6 @@ func (g *Gemini) addCommonArgs() {
 
 	if g.skipPermissions {
 		g.bin.Arg("--approval-mode", "yolo")
-	}
-
-	if g.model != "" {
-		g.bin.Arg("--model", g.model)
 	}
 
 	g.bin.Arg("-p")
