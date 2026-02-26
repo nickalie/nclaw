@@ -88,13 +88,13 @@ Key design decisions:
 - Modify: `internal/webhook/webhook.go`
 - Modify: `cmd/nclaw/main.go`
 
-- [ ] Update `pipeline.Process()` signature to accept `*cli.Result` instead of `*claude.Result`
-- [ ] Add `cli.Provider` field to `handler.Handler`; rename `callClaude` to `callCLI`, use provider
-- [ ] Add `cli.Provider` parameter to `scheduler.New()`; rename `invokeClaudeForTask` to `invokeCLI`, use provider
-- [ ] Add `cli.Provider` parameter to `webhook.NewManager()`; rename `callClaude` to `callCLI`, use provider
-- [ ] Update `cmd/nclaw/main.go`: create `claude.NewProvider()`, pass to handler/scheduler/webhook, use for startup version check
-- [ ] Update all existing tests for modified packages
-- [ ] Run project test suite - must pass before task 4
+- [x] Update `pipeline.Process()` signature to accept `*cli.Result` instead of `*claude.Result`
+- [x] Add `cli.Provider` field to `handler.Handler`; rename `callClaude` to `callCLI`, use provider
+- [x] Add `cli.Provider` parameter to `scheduler.New()`; rename `invokeClaudeForTask` to `invokeCLI`, use provider
+- [x] Add `cli.Provider` parameter to `webhook.NewManager()`; rename `callClaude` to `callCLI`, use provider
+- [x] Update `cmd/nclaw/main.go`: create `claude.NewProvider()`, pass to handler/scheduler/webhook, use for startup version check
+- [x] Update all existing tests for modified packages
+- [x] Run project test suite - must pass before task 4
 
 ### Task 4: Implement Codex CLI adapter
 

@@ -11,7 +11,7 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
-	"github.com/nickalie/nclaw/internal/claude"
+	"github.com/nickalie/nclaw/internal/cli"
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/pipeline"
 	"github.com/nickalie/nclaw/internal/scheduler"
@@ -20,6 +20,7 @@ import (
 
 // Handler processes incoming Telegram messages.
 type Handler struct {
+	Provider   cli.Provider
 	Scheduler  *scheduler.Scheduler
 	Pipeline   *pipeline.Pipeline
 	ChatLocker *telegram.ChatLocker
@@ -64,11 +65,11 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	log.Printf("handler: received message from chat=%d thread=%d text=%q hasFile=%v", chatID, threadID, text, att != nil)
 
 	unlock := h.ChatLocker.Lock(chatID, threadID)
-	result, claudeErr := h.callClaude(dir, prompt, chatID, threadID)
+	result, cliErr := h.callCLI(dir, prompt, chatID, threadID)
 	unlock()
 	stopTyping()
 
-	h.Pipeline.Process(ctx, result, claudeErr, chatID, threadID, dir)
+	h.Pipeline.Process(ctx, result, cliErr, chatID, threadID, dir)
 }
 
 // resolveContent extracts text and attachment from a message, falling back to reply attachment.
@@ -130,21 +131,21 @@ func buildPrompt(ctx context.Context, b *bot.Bot, text string, att *attachment, 
 	return prompt
 }
 
-func (h *Handler) callClaude(dir, prompt string, chatID int64, threadID int) (*claude.Result, error) {
+func (h *Handler) callCLI(dir, prompt string, chatID int64, threadID int) (*cli.Result, error) {
 	taskPrompt := h.Scheduler.FormatTaskList(chatID, threadID)
 	systemPrompt := telegram.Prompt + "\n\n" + taskPrompt
 
-	if err := claude.EnsureValidToken(); err != nil {
-		log.Printf("handler: token refresh warning: %v", err)
+	if err := h.Provider.PreInvoke(); err != nil {
+		log.Printf("handler: pre-invoke warning: %v", err)
 	}
 
-	log.Printf("handler: calling claude.Continue in dir=%s", dir)
-	result, err := claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(systemPrompt).Continue(prompt)
+	log.Printf("handler: calling %s Continue in dir=%s", h.Provider.Name(), dir)
+	result, err := h.Provider.NewClient().Dir(dir).SkipPermissions().AppendSystemPrompt(systemPrompt).Continue(prompt)
 
 	if err != nil {
-		log.Printf("handler: claude error: %v", err)
+		log.Printf("handler: %s error: %v", h.Provider.Name(), err)
 		if result.Text == "" {
-			result = &claude.Result{Text: "error: " + err.Error(), FullText: "error: " + err.Error()}
+			result = &cli.Result{Text: "error: " + err.Error(), FullText: "error: " + err.Error()}
 		}
 	}
 

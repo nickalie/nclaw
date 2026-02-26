@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/nickalie/nclaw/internal/claude"
+	"github.com/nickalie/nclaw/internal/cli"
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/handler"
@@ -48,27 +49,28 @@ func main() {
 		log.Fatal("db init: ", err)
 	}
 
-	// Verify Claude Code CLI is available before starting.
-	claudeVer, err := claude.New().Version()
+	// Create CLI provider and verify it's available before starting.
+	provider := claude.NewProvider()
+	cliVer, err := provider.Version()
 	if err != nil {
-		log.Fatalf("claude code cli not found: %v", err)
+		log.Fatalf("%s cli not found: %v", provider.Name(), err)
 	}
 
-	b, sched, webhookMgr, webhookSrv := setupBot(database)
+	b, sched, webhookMgr, webhookSrv := setupBot(database, provider)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	defer sched.Shutdown()
 	defer shutdownWebhook(webhookSrv, webhookMgr)
 
-	log.Printf("nclaw bot started (%s, claude code: %s)", version.String(), claudeVer)
+	log.Printf("nclaw bot started (%s, %s: %s)", version.String(), provider.Name(), cliVer)
 	sendStartupNotifications(b)
 	b.Start(ctx)
 }
 
-func setupBot(database *gorm.DB) (*bot.Bot, *scheduler.Scheduler, *webhook.Manager, *webhook.Server) {
+func setupBot(database *gorm.DB, provider cli.Provider) (*bot.Bot, *scheduler.Scheduler, *webhook.Manager, *webhook.Server) {
 	chatLocker := telegram.NewChatLocker()
-	h := &handler.Handler{ChatLocker: chatLocker}
+	h := &handler.Handler{Provider: provider, ChatLocker: chatLocker}
 
 	b, err := bot.New(config.TelegramBotToken(),
 		bot.WithDefaultHandler(h.Default),
@@ -82,14 +84,14 @@ func setupBot(database *gorm.DB) (*bot.Bot, *scheduler.Scheduler, *webhook.Manag
 		Doc:   newSendDocFunc(b),
 		Audio: newSendAudioFunc(b),
 	}
-	sched, err := scheduler.New(database, config.Timezone(), config.DataDir(), chatLocker)
+	sched, err := scheduler.New(database, provider, config.Timezone(), config.DataDir(), chatLocker)
 	if err != nil {
 		log.Fatal("scheduler: ", err)
 	}
 
 	h.Scheduler = sched
 
-	webhookMgr := createWebhookManager(database, chatLocker)
+	webhookMgr := createWebhookManager(database, provider, chatLocker)
 	p := buildPipeline(b, fileSenders, sched, webhookMgr)
 	h.Pipeline = p
 	sched.SetPipeline(p)
@@ -133,12 +135,13 @@ func hasFlag(flags ...string) bool {
 
 func printVersion() error {
 	fmt.Printf("nclaw %s\n", version.String())
-	v, err := claude.New().Version()
+	provider := claude.NewProvider()
+	v, err := provider.Version()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "claude code: error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%s: error: %v\n", provider.Name(), err)
 		return err
 	}
-	fmt.Printf("claude code: %s\n", v)
+	fmt.Printf("%s: %s\n", provider.Name(), v)
 	return nil
 }
 
@@ -240,12 +243,12 @@ func newPipelineSendFunc(b *bot.Bot) pipeline.SendFunc {
 	}
 }
 
-func createWebhookManager(database *gorm.DB, chatLocker *telegram.ChatLocker) *webhook.Manager {
+func createWebhookManager(database *gorm.DB, provider cli.Provider, chatLocker *telegram.ChatLocker) *webhook.Manager {
 	domain := config.WebhookBaseDomain()
 	if domain == "" {
 		return nil
 	}
-	return webhook.NewManager(database, domain, config.DataDir(), chatLocker)
+	return webhook.NewManager(database, provider, domain, config.DataDir(), chatLocker)
 }
 
 func startWebhookServer(mgr *webhook.Manager) *webhook.Server {

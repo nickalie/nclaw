@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/nickalie/nclaw/internal/claude"
+	"github.com/nickalie/nclaw/internal/cli"
 	"github.com/nickalie/nclaw/internal/sendfile"
 )
 
@@ -51,7 +51,7 @@ func TestProcess_SuccessPath(t *testing.T) {
 	ms := &mockSend{}
 	p := New(ms.fn(), sendfile.Senders{}, true, exec)
 
-	result := &claude.Result{
+	result := &cli.Result{
 		Text:     "Hello world",
 		FullText: "Hello world",
 	}
@@ -70,7 +70,7 @@ func TestProcess_ErrorPath_SkipsExecution(t *testing.T) {
 	ms := &mockSend{}
 	p := New(ms.fn(), sendfile.Senders{}, true, exec)
 
-	result := &claude.Result{
+	result := &cli.Result{
 		Text:     "error: something went wrong",
 		FullText: "error: something went wrong",
 	}
@@ -87,7 +87,7 @@ func TestProcess_NilWebhookExecutor_Filtered(t *testing.T) {
 	// Pass a nil executor alongside a real one — nil should be filtered.
 	p := New(ms.fn(), sendfile.Senders{}, true, exec, nil)
 
-	result := &claude.Result{Text: "reply", FullText: "reply"}
+	result := &cli.Result{Text: "reply", FullText: "reply"}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
 
 	assert.True(t, exec.called)
@@ -100,7 +100,7 @@ func TestProcess_StatusAppending(t *testing.T) {
 	ms := &mockSend{}
 	p := New(ms.fn(), sendfile.Senders{}, true, exec1, exec2)
 
-	result := &claude.Result{Text: "Done", FullText: "Done"}
+	result := &cli.Result{Text: "Done", FullText: "Done"}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
 
 	require.Len(t, ms.calls, 1)
@@ -113,7 +113,7 @@ func TestProcess_EmptyText_NoSend(t *testing.T) {
 	ms := &mockSend{}
 	p := New(ms.fn(), sendfile.Senders{}, true)
 
-	result := &claude.Result{Text: "", FullText: ""}
+	result := &cli.Result{Text: "", FullText: ""}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
 
 	assert.Empty(t, ms.calls, "should not send empty text")
@@ -129,7 +129,7 @@ func TestProcess_StripsAllBlockTypes(t *testing.T) {
 		"```nclaw:webhook\n{\"action\":\"list\"}\n```\n" +
 		"Goodbye"
 
-	result := &claude.Result{Text: text, FullText: text}
+	result := &cli.Result{Text: text, FullText: text}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
 
 	require.Len(t, ms.calls, 1)
@@ -151,7 +151,7 @@ func TestProcess_HTMLFallbackToPlainText(t *testing.T) {
 	}
 	p := New(sendFn, sendfile.Senders{}, true)
 
-	result := &claude.Result{Text: "Hello", FullText: "Hello"}
+	result := &cli.Result{Text: "Hello", FullText: "Hello"}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
 
 	assert.Equal(t, 2, callCount, "should try HTML then plain text")
@@ -163,7 +163,7 @@ func TestProcess_MultipleExecutors(t *testing.T) {
 	ms := &mockSend{}
 	p := New(ms.fn(), sendfile.Senders{}, true, exec1, exec2)
 
-	result := &claude.Result{Text: "reply", FullText: "full reply"}
+	result := &cli.Result{Text: "reply", FullText: "full reply"}
 	p.Process(context.Background(), result, nil, 100, 5, "/tmp")
 
 	assert.True(t, exec1.called)
@@ -203,7 +203,7 @@ func TestProcess_WebhooksNotConfigured_WarningAppended(t *testing.T) {
 	p := New(ms.fn(), sendfile.Senders{}, false) // webhooksConfigured=false
 
 	text := "Here you go.\n```nclaw:webhook\n{\"action\":\"create\",\"description\":\"test\"}\n```\nDone!"
-	result := &claude.Result{Text: text, FullText: text}
+	result := &cli.Result{Text: text, FullText: text}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
 
 	require.Len(t, ms.calls, 1)
@@ -219,7 +219,7 @@ func TestProcess_WebhooksConfigured_NoWarning(t *testing.T) {
 	p := New(ms.fn(), sendfile.Senders{}, true, exec) // webhooksConfigured=true
 
 	text := "Done.\n```nclaw:webhook\n{\"action\":\"create\"}\n```"
-	result := &claude.Result{Text: text, FullText: text}
+	result := &cli.Result{Text: text, FullText: text}
 	p.Process(context.Background(), result, nil, 100, 0, "/tmp")
 
 	require.Len(t, ms.calls, 1)

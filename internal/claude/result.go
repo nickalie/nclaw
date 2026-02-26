@@ -10,11 +10,6 @@ import (
 	"github.com/nickalie/nclaw/internal/cli"
 )
 
-// Result is a type alias for cli.Result, preserving backward compatibility
-// for consumers that still reference claude.Result. Will be removed once
-// all consumers migrate to cli.Result directly (Task 3).
-type Result = cli.Result
-
 // streamEvent represents a single event from Claude CLI stream-json output.
 type streamEvent struct {
 	Type    string          `json:"type"`
