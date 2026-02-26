@@ -113,12 +113,12 @@ CLI mapping:
 - Version: `codex --version`
 - Output: parse JSONL events from `--json` flag
 
-- [ ] Create `Codex` struct implementing `cli.Client` with go-binwrapper
-- [ ] Create `Provider` struct implementing `cli.Provider` (PreInvoke is no-op)
-- [ ] Create JSONL output parser extracting assistant messages for FullText and final message for Text
-- [ ] Write tests for JSONL parsing with sample Codex output
-- [ ] Write tests for command argument construction
-- [ ] Run project test suite - must pass before task 5
+- [x] Create `Codex` struct implementing `cli.Client` with go-binwrapper
+- [x] Create `Provider` struct implementing `cli.Provider` (PreInvoke is no-op)
+- [x] Create JSONL output parser extracting assistant messages for FullText and final message for Text
+- [x] Write tests for JSONL parsing with sample Codex output
+- [x] Write tests for command argument construction
+- [x] Run project test suite - must pass before task 5
 
 ### Task 5: Implement Copilot CLI adapter
 
