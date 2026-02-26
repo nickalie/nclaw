@@ -1,6 +1,6 @@
 # nclaw
 
-**N**Claw — a**N**other Claw. A lightweight, container-first AI coding assistant accessible through Telegram. Supports Claude Code (default), OpenAI Codex, and GitHub Copilot as CLI backends. Written in Go.
+**N**Claw — a**N**other Claw. A lightweight, container-first AI coding assistant accessible through Telegram. Supports Claude Code (default), 580+ models via multi-model backend (OpenRouter, Gemini, OpenAI, Ollama, and more), OpenAI Codex, and GitHub Copilot as CLI backends. Written in Go.
 
 ## Table of Contents
 
@@ -8,6 +8,7 @@
 - [How It Works](#how-it-works)
 - [Features](#features)
 - [Docker](#docker)
+- [Multi-Model](#multi-model)
 - [Kubernetes (Helm)](#kubernetes-helm)
 - [Running without Docker](#running-without-docker)
   - [Installation](#installation)
@@ -55,17 +56,18 @@ The recommended way to run NClaw is inside Docker — the container serves as a 
 - **Scheduled tasks** — Create recurring or one-time jobs using natural language.
 - **Webhooks** — Register HTTP endpoints that forward incoming requests to Claude in your chat.
 - **Rich runtime** — Docker image includes git, gh CLI, Chromium, Go, Node.js, Python/uv. The assistant can install additional packages on the fly as needed — for example, `apk add ffmpeg` to process video, `npm install -g prettier` to format code, or `pip install pandas` to analyze data.
-- **Multiple CLI backends** — Supports Claude Code (default), OpenAI Codex, and GitHub Copilot. Switch backends via the `NCLAW_CLI` environment variable.
+- **Multiple CLI backends** — Supports Claude Code (default), multi-model (580+ models via OpenRouter, Gemini, OpenAI, Ollama, etc.), OpenAI Codex, and GitHub Copilot. Switch backends via the `NCLAW_CLI` environment variable.
 - **HTML-formatted replies** — Responses render using Telegram's HTML formatting with plain-text fallback.
 
 ## Docker
 
-NClaw provides four Docker images, all based on `node:24-alpine` with shared tools (git, gh CLI, Chromium, Go, Node.js, Python/uv, skills). They differ only in which CLI backend is pre-installed:
+NClaw provides five Docker images, all based on `node:24-alpine` with shared tools (git, gh CLI, Chromium, Go, Node.js, Python/uv, skills). They differ only in which CLI backend is pre-installed:
 
 | Image | Tag | CLI Backends | Size |
 |---|---|---|---|
-| **All-in-one** | `latest` | Claude Code + Codex + Copilot | Largest |
+| **All-in-one** | `latest` | Claude Code + Multi-Model + Codex + Copilot | Largest |
 | **Claude** | `claude` | Claude Code | Medium |
+| **Multi-Model** | `multi-model` | Claude Code + Multi-Model | Medium |
 | **Codex** | `codex` | OpenAI Codex | Medium |
 | **Copilot** | `copilot` | GitHub Copilot | Medium |
 
@@ -84,6 +86,32 @@ docker run -d --name nclaw \
 ```
 
 Claude Code uses OAuth authentication. Mount your credentials file from `~/.claude/.credentials.json`. To obtain credentials, install Claude Code locally and run `claude login`.
+
+### Multi-Model
+
+```bash
+docker run -d --name nclaw \
+  -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
+  -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+  -e NCLAW_DATA_DIR=/app/data \
+  -e NCLAW_MODEL=g@gemini-2.5-pro \
+  -e GEMINI_API_KEY=your-gemini-key \
+  -v ./data:/app/data \
+  ghcr.io/nickalie/nclaw:multi-model
+```
+
+```bash
+docker run -d --name nclaw \
+  -e NCLAW_TELEGRAM_BOT_TOKEN=your-token \
+  -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+  -e NCLAW_DATA_DIR=/app/data \
+  -e NCLAW_MODEL=zai@glm-4 \
+  -e ZAI_API_KEY=your-zai-key \
+  -v ./data:/app/data \
+  ghcr.io/nickalie/nclaw:multi-model
+```
+
+Setting `NCLAW_MODEL` automatically selects the multi-model backend. No Anthropic credentials are needed — only an API key from your chosen provider. See [Multi-Model](#multi-model) for full configuration details.
 
 ### Codex
 
@@ -127,7 +155,7 @@ docker run -d --name nclaw \
   ghcr.io/nickalie/nclaw:latest
 ```
 
-The all-in-one image includes all three CLI backends. Set `NCLAW_CLI` to `claude` (default), `codex`, or `copilot` to choose the backend. Mount the appropriate credentials for your chosen backend.
+The all-in-one image includes all four CLI backends. Set `NCLAW_CLI` to `claude` (default), `claudish` (multi-model), `codex`, or `copilot` to choose the backend. Mount the appropriate credentials for your chosen backend.
 
 ### Webhooks
 
@@ -145,6 +173,80 @@ docker run -d --name nclaw \
   -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
   ghcr.io/nickalie/nclaw:latest
 ```
+
+## Multi-Model
+
+NClaw's multi-model backend (powered by [claudish](https://github.com/MadAppGang/claudish)) lets you use 580+ models from OpenRouter, Google Gemini, OpenAI, Vertex AI, Ollama, LM Studio, and more — while retaining full agentic capabilities (tool use, file editing, scheduled tasks, webhooks, file delivery).
+
+### Supported Providers
+
+| Provider | Prefix | Example | Auth |
+|---|---|---|---|
+| **OpenRouter** | `or@` | `or@deepseek/deepseek-r1` | `OPENROUTER_API_KEY` |
+| **Google Gemini** | `g@` | `g@gemini-2.0-flash` | `GEMINI_API_KEY` |
+| **OpenAI** | `oai@` | `oai@gpt-4o` | `OPENAI_API_KEY` |
+| **Vertex AI** | `v@` | `v@gemini-2.5-flash` | `VERTEX_API_KEY` |
+| **OllamaCloud** | `oc@` | `oc@llama-3.1-70b` | `OLLAMA_API_KEY` |
+| **Kimi** | `kimi@` | `kimi@kimi-k2` | `MOONSHOT_API_KEY` |
+| **GLM (Zhipu)** | `glm@` | `glm@glm-4` | `ZHIPU_API_KEY` |
+| **Z.AI** | `zai@` | `zai@glm-4` | `ZAI_API_KEY` |
+| **MiniMax** | `mm@` | `mm@MiniMax-M2.1` | `MINIMAX_API_KEY` |
+| **Poe** | `poe@` | `poe@GPT-4o` | `POE_API_KEY` |
+| **OpenCode Zen** | `zen@` | `zen@grok-code` | Free (no key) |
+| **Gemini CodeAssist** | `go@` | `go@gemini-2.5-flash` | OAuth |
+| **Ollama** | `ollama@` | `ollama@llama3.2` | Local (no key) |
+| **LM Studio** | `lms@` | `lms@qwen2.5-coder` | Local (no key) |
+| **vLLM** | `vllm@` | `vllm@mistral-7b` | Local (no key) |
+| **MLX** | `mlx@` | `mlx@llama-3.2-3b` | Local (no key) |
+
+Well-known model names (e.g. `gpt-4o`, `gemini-2.0-flash`) are auto-detected without a provider prefix.
+
+### Model Selection
+
+Set `NCLAW_MODEL` to choose the default model. This automatically selects the multi-model backend — no need to set `NCLAW_CLI` explicitly:
+
+```bash
+# Use Gemini via direct API
+export NCLAW_MODEL=g@gemini-2.5-pro
+export GEMINI_API_KEY=your-key
+
+# Use GPT-4o via OpenAI
+export NCLAW_MODEL=oai@gpt-4o
+export OPENAI_API_KEY=your-key
+
+# Use any model via OpenRouter
+export NCLAW_MODEL=or@anthropic/claude-sonnet-4
+export OPENROUTER_API_KEY=your-key
+
+# Use a local model via Ollama
+export NCLAW_MODEL=ollama@llama3.2
+```
+
+### Model Tier Overrides
+
+The CLI internally uses different model tiers (Opus, Sonnet, Haiku) for different tasks. You can override which model is used for each tier:
+
+| Variable | Purpose |
+|---|---|
+| `NCLAW_MODEL` | Default model for all requests |
+| `NCLAW_MODEL_OPUS` | Override for Opus-tier tasks (complex reasoning) |
+| `NCLAW_MODEL_SONNET` | Override for Sonnet-tier tasks (general coding) |
+| `NCLAW_MODEL_HAIKU` | Override for Haiku-tier tasks (quick operations) |
+| `NCLAW_MODEL_SUBAGENT` | Override for subagent tasks |
+
+### Local Models
+
+For fully offline operation, use Ollama or LM Studio. Your code never leaves your machine:
+
+```bash
+# Start Ollama and pull a model
+ollama pull llama3.2
+
+# Configure nclaw to use it
+export NCLAW_MODEL=ollama@llama3.2
+```
+
+Set `OLLAMA_BASE_URL`, `LMSTUDIO_BASE_URL`, `VLLM_BASE_URL`, or `MLX_BASE_URL` to connect to custom endpoints.
 
 ## Kubernetes (Helm)
 
@@ -183,7 +285,12 @@ kubectl create secret generic my-copilot-secret \
 | `env.telegramBotToken` | `""` | Telegram bot token |
 | `env.whitelistChatIds` | `""` | Comma-separated allowed chat IDs |
 | `env.webhookBaseDomain` | `""` | Base domain for webhook URLs |
-| `env.cli` | `""` | CLI backend: `claude`, `codex`, or `copilot` (empty = image default) |
+| `env.cli` | `""` | CLI backend: `claude`, `claudish` (multi-model), `codex`, or `copilot` (empty = image default) |
+| `env.model` | `""` | Model for multi-model backend (e.g. `g@gemini-2.5-pro`). Setting this auto-selects multi-model |
+| `env.modelOpus` | `""` | Opus-tier model override |
+| `env.modelSonnet` | `""` | Sonnet-tier model override |
+| `env.modelHaiku` | `""` | Haiku-tier model override |
+| `env.modelSubagent` | `""` | Subagent model override |
 | `existingSecret` | `""` | Use existing secret for bot token (key: `telegram-bot-token`) |
 | `claudeCredentialsSecret` | `""` | Secret with Claude credentials (key: `credentials.json`) |
 | `codexCredentialsSecret` | `""` | Secret with Codex credentials (key: `auth.json`) |
@@ -204,7 +311,7 @@ kubectl create secret generic my-copilot-secret \
 
 ## Running without Docker
 
-NClaw is a regular executable and can run directly on any machine. The only runtime dependency is the CLI for your chosen backend — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default), [OpenAI Codex](https://github.com/openai/codex), or [GitHub Copilot](https://docs.github.com/en/copilot/github-copilot-in-the-cli) — it must be installed and available in `PATH`.
+NClaw is a regular executable and can run directly on any machine. The only runtime dependency is the CLI for your chosen backend — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default), [claudish](https://github.com/MadAppGang/claudish) (multi-model), [OpenAI Codex](https://github.com/openai/codex), or [GitHub Copilot](https://docs.github.com/en/copilot/github-copilot-in-the-cli) — it must be installed and available in `PATH`.
 
 > **Security notice:** Without Docker, Claude Code runs directly on the host with the same permissions as the nclaw process. It has full access to the file system, network, and any credentials available to the user. Run under a dedicated unprivileged user and avoid running as root. For production use, Docker or Kubernetes deployment is strongly recommended.
 
@@ -294,13 +401,18 @@ NClaw reads configuration from environment variables, `.env` files, or YAML conf
 
 ### Environment variables
 
-All variables use the `NCLAW_` prefix.
+NClaw variables use the `NCLAW_` prefix. Provider API keys use the provider's native env var name (no prefix) — they pass through to the multi-model backend automatically.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `NCLAW_TELEGRAM_BOT_TOKEN` | Yes | — | Telegram bot token from [@BotFather](https://t.me/BotFather) |
 | `NCLAW_DATA_DIR` | Yes | — | Base directory for session data and files |
-| `NCLAW_CLI` | No | `claude` | CLI backend to use: `claude`, `codex`, or `copilot` |
+| `NCLAW_CLI` | No | `claude` | CLI backend: `claude`, `claudish` (multi-model), `codex`, or `copilot`. Auto-selects `claudish` when `NCLAW_MODEL` is set |
+| `NCLAW_MODEL` | No | — | Model for multi-model backend (e.g. `g@gemini-2.5-pro`, `oai@gpt-4o`). Setting this auto-selects multi-model |
+| `NCLAW_MODEL_OPUS` | No | — | Opus-tier model override |
+| `NCLAW_MODEL_SONNET` | No | — | Sonnet-tier model override |
+| `NCLAW_MODEL_HAIKU` | No | — | Haiku-tier model override |
+| `NCLAW_MODEL_SUBAGENT` | No | — | Subagent model override |
 | `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | No | — | Comma-separated list of allowed Telegram chat IDs. If unset, accepts all chats (with a security warning) |
 | `NCLAW_DB_PATH` | No | `{data_dir}/nclaw.db` | Path to the SQLite database |
 | `NCLAW_TIMEZONE` | No | system local | Timezone for the scheduler (e.g. `Europe/Berlin`) |
@@ -318,10 +430,20 @@ telegram:
   bot_token: "your-telegram-bot-token"
   whitelist_chat_ids: "123456789,987654321"
 
-cli: "claude"  # Options: claude, codex, copilot
+cli: "claude"  # Options: claude, claudish, codex, copilot
 data_dir: "/app/data"
 db_path: "/app/data/nclaw.db"
 timezone: "Europe/Berlin"
+
+# Multi-model settings (setting model auto-selects multi-model backend)
+model: ""                  # e.g. "g@gemini-2.5-pro", "oai@gpt-4o"
+model_opus: ""             # Opus-tier override
+model_sonnet: ""           # Sonnet-tier override
+model_haiku: ""            # Haiku-tier override
+model_subagent: ""         # Subagent model override
+
+# Provider API keys are set as regular env vars (not in this file):
+# OPENROUTER_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, etc.
 
 webhook:
   base_domain: "example.com"

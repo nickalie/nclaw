@@ -9,6 +9,7 @@ import (
 
 	"github.com/nickalie/go-binwrapper"
 	"github.com/nickalie/nclaw/internal/cli"
+	"github.com/nickalie/nclaw/internal/cli/streamjson"
 )
 
 // Compile-time check: *Claude implements cli.Client.
@@ -211,7 +212,7 @@ func (c *Claude) Resume(session, query string) (*cli.Result, error) {
 // runAndParse executes the CLI and parses stream-json output into a Result.
 func (c *Claude) runAndParse(query string) (*cli.Result, error) {
 	if err := c.bin.Run(query); err != nil {
-		result := parseStreamOutput(c.bin.StdOut())
+		result := streamjson.ParseOutput(c.bin.StdOut())
 		if result.Text == "" && result.FullText == "" {
 			text := strings.TrimSpace(string(c.bin.CombinedOutput()))
 			result = &cli.Result{Text: text, FullText: text}
@@ -219,7 +220,7 @@ func (c *Claude) runAndParse(query string) (*cli.Result, error) {
 		return result, fmt.Errorf("claude: %w", err)
 	}
 
-	return parseStreamOutput(c.bin.StdOut()), nil
+	return streamjson.ParseOutput(c.bin.StdOut()), nil
 }
 
 // Version returns the Claude CLI version string.

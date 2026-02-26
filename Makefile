@@ -1,4 +1,4 @@
-.PHONY: run lint test docker docker-claude docker-codex docker-copilot smoke-test
+.PHONY: run lint test docker docker-claude docker-multi-model docker-codex docker-copilot smoke-test
 
 VERSION    ?= dev
 COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -28,6 +28,9 @@ docker:
 
 docker-claude:
 	docker build -f docker/Dockerfile --target claude -t nclaw:claude .
+
+docker-multi-model:
+	docker build -f docker/Dockerfile --target multi-model -t nclaw:multi-model .
 
 docker-codex:
 	docker build -f docker/Dockerfile --target codex -t nclaw:codex .

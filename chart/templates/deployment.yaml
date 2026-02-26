@@ -82,12 +82,38 @@ spec:
             - name: NCLAW_CLI
               value: {{ .Values.env.cli | quote }}
             {{- end }}
+            {{- if .Values.env.model }}
+            - name: NCLAW_MODEL
+              value: {{ .Values.env.model | quote }}
+            {{- end }}
+            {{- if .Values.env.modelOpus }}
+            - name: NCLAW_MODEL_OPUS
+              value: {{ .Values.env.modelOpus | quote }}
+            {{- end }}
+            {{- if .Values.env.modelSonnet }}
+            - name: NCLAW_MODEL_SONNET
+              value: {{ .Values.env.modelSonnet | quote }}
+            {{- end }}
+            {{- if .Values.env.modelHaiku }}
+            - name: NCLAW_MODEL_HAIKU
+              value: {{ .Values.env.modelHaiku | quote }}
+            {{- end }}
+            {{- if .Values.env.modelSubagent }}
+            - name: NCLAW_MODEL_SUBAGENT
+              value: {{ .Values.env.modelSubagent | quote }}
+            {{- end }}
             {{- if .Values.proxy.enabled }}
             - name: HTTP_PROXY
               value: {{ .Values.proxy.httpProxy | quote }}
             - name: HTTPS_PROXY
               value: {{ .Values.proxy.httpsProxy | quote }}
             {{- end }}
+          {{- if .Values.claudishApiKeysSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.claudishApiKeysSecret }}
+                optional: true
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

@@ -16,6 +16,7 @@ import (
 
 	"github.com/nickalie/nclaw/internal/cli"
 	"github.com/nickalie/nclaw/internal/cli/claude"
+	"github.com/nickalie/nclaw/internal/cli/claudish"
 	"github.com/nickalie/nclaw/internal/cli/codex"
 	"github.com/nickalie/nclaw/internal/cli/copilot"
 	"github.com/nickalie/nclaw/internal/config"
@@ -160,6 +161,10 @@ func newProvider(backend string) (cli.Provider, error) {
 	switch backend {
 	case "claude":
 		return claude.NewProvider(), nil
+	case "claudish":
+		return claudish.NewProvider(
+			config.Model(), config.ModelOpus(), config.ModelSonnet(), config.ModelHaiku(), config.ModelSubagent(),
+		), nil
 	case "codex":
 		return codex.NewProvider(), nil
 	case "copilot":

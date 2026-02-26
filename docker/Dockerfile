@@ -76,6 +76,10 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN cp -r /opt/nclaw-skills/* /root/.claude/skills/
 RUN echo '{"autoCompact": true}' > /root/.claude/settings.json
 
+# ---------- multi-model ----------
+FROM claude AS multi-model
+RUN npm install -g claudish
+
 # ---------- codex ----------
 FROM base AS codex
 RUN npm install -g @openai/codex
@@ -92,6 +96,7 @@ RUN mkdir -p /root/.copilot/skills && \
 
 # ---------- all-in-one (default) ----------
 FROM claude AS all
+RUN npm install -g claudish
 RUN npm install -g @openai/codex
 RUN npm install -g @githubnext/github-copilot-cli
 RUN mkdir -p /root/.codex/skills /root/.copilot/skills && \
