@@ -93,13 +93,13 @@ Add Google's Gemini CLI (`gemini`) as a new CLI backend, following the same prov
 - Modify: `CLAUDE.md`
 - Modify: `README.md` (if user-facing changes documented there)
 
-- [ ] Add `internal/cli/gemini/` to Project Structure section in CLAUDE.md
-- [ ] Add Gemini adapter description to CLI Adapters section
-- [ ] Add `NCLAW_CLI=gemini` to Configuration section
-- [ ] Add `docker-gemini` to Commands section
-- [ ] Add gemini Docker target to Docker section
-- [ ] Update README.md with Gemini as a supported backend
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Add `internal/cli/gemini/` to Project Structure section in CLAUDE.md
+- [x] Add Gemini adapter description to CLI Adapters section
+- [x] Add `NCLAW_CLI=gemini` to Configuration section
+- [x] Add `docker-gemini` to Commands section
+- [x] Add gemini Docker target to Docker section
+- [x] Update README.md with Gemini as a supported backend
+- [x] Move this plan to `docs/plans/completed/`
 
 ### Task 6: Verify acceptance criteria
 

@@ -22,6 +22,7 @@ Three input channels (handler, scheduler, webhook) each invoke the configured CL
 - `internal/cli/claudish/` - Multi-model CLI adapter (via OpenRouter, Gemini, OpenAI, Ollama, etc.)
 - `internal/codex/` - OpenAI Codex CLI adapter (JSONL event parsing, AGENTS.md system prompt)
 - `internal/copilot/` - GitHub Copilot CLI adapter (plain text output, `.github/copilot-instructions.md` system prompt)
+- `internal/cli/gemini/` - Gemini CLI adapter (NDJSON stream-json parsing, `GEMINI.md` system prompt)
 - `internal/handler/` - Telegram message handling, file attachments, reply context
 - `internal/pipeline/` - Unified post-processing: block execution, stripping, sendfile, reply delivery
 - `internal/sendfile/` - Shared sendfile processing: parses `nclaw:sendfile` blocks, validates paths, sends documents
@@ -41,6 +42,7 @@ All CLI backends implement two interfaces: `cli.Client` (per-request builder wit
 - **Claudish** (`internal/cli/claudish/`): Wraps Claude Code via [claudish](https://github.com/MadAppGang/claudish), proxying API calls to alternative providers (OpenRouter, Gemini, OpenAI, Ollama, LM Studio, etc.). Uses the same stream-json output format as Claude, parsed via the shared `streamjson` package. Passes model config (`--model` flag) and model tier overrides (`CLAUDISH_MODEL_OPUS/SONNET/HAIKU/SUBAGENT`) as environment variables. Provider API keys (e.g. `OPENROUTER_API_KEY`, `GEMINI_API_KEY`) pass through from the OS environment. `PreInvoke()` is a no-op.
 - **Codex** (`internal/codex/`): JSONL event parsing (`item.completed` with `type: "agent_message"`). System prompt written to `AGENTS.md` in the working directory.
 - **Copilot** (`internal/copilot/`): Plain text output via `-s` flag (`Text == FullText`). System prompt written to `.github/copilot-instructions.md`. Known limitation: no structured output, so command blocks in intermediate messages are not captured.
+- **Gemini** (`internal/cli/gemini/`): NDJSON stream-json output parsing (`--output-format stream-json`) with its own event types (message, tool_use, tool_result, error, result). System prompt written to `GEMINI.md` in the working directory. Uses `--approval-mode yolo` for auto-approve. `PreInvoke()` is a no-op.
 
 ### OAuth Token Refresh
 Before each Claude CLI invocation, `claude.EnsureValidToken()` (called via `Provider.PreInvoke()`) proactively refreshes the OAuth token if it expires within 5 minutes. Credentials are read from `~/.claude/.credentials.json` using field-preserving JSON round-tripping. Refresh failures are logged as warnings and do not block the CLI call. Codex and Copilot providers have no-op `PreInvoke()`.
@@ -74,7 +76,7 @@ Required env vars (prefix `NCLAW_`):
 - `NCLAW_DATA_DIR` - Base directory for session data and files
 
 Optional:
-- `NCLAW_CLI` - CLI backend to use: `claude` (default), `claudish` (multi-model), `codex`, or `copilot`. Auto-selects `claudish` when `NCLAW_MODEL` is set
+- `NCLAW_CLI` - CLI backend to use: `claude` (default), `claudish` (multi-model), `codex`, `copilot`, or `gemini`. Auto-selects `claudish` when `NCLAW_MODEL` is set
 - `NCLAW_MODEL` - Model for multi-model backend (e.g. `g@gemini-2.5-pro`, `oai@gpt-4o`)
 - `NCLAW_MODEL_OPUS` - Claudish Opus-tier model override
 - `NCLAW_MODEL_SONNET` - Claudish Sonnet-tier model override
@@ -97,6 +99,7 @@ make docker-claude   # Build Claude-only image
 make docker-multi-model # Build multi-model image
 make docker-codex    # Build Codex-only image
 make docker-copilot  # Build Copilot-only image
+make docker-gemini   # Build Gemini-only image
 ```
 
 ## Code Style
@@ -112,7 +115,7 @@ make docker-copilot  # Build Copilot-only image
 
 - Go 1.25
 - `github.com/go-telegram/bot` - Telegram bot framework
-- `github.com/nickalie/go-binwrapper` - Binary wrapper for CLI backends (Claude, Codex, Copilot)
+- `github.com/nickalie/go-binwrapper` - Binary wrapper for CLI backends (Claude, Codex, Copilot, Gemini)
 - `github.com/spf13/viper` + `github.com/joho/godotenv` - Configuration
 - `gorm.io/gorm` + `gorm.io/driver/sqlite` - Database
 - `github.com/go-co-op/gocron/v2` - Task scheduling
@@ -127,7 +130,7 @@ GitHub Actions pipeline (`.github/workflows/ci.yml`):
 2. **Test** - `go test -v ./...`
 3. **Release** - GoReleaser cross-compilation (on tag push)
 4. **Chocolatey** - Build and push `.nupkg` to Chocolatey (on tag push, Windows runner)
-5. **Docker** - Build and push 5 image variants to GHCR on push to main or tagged releases (matrix strategy)
+5. **Docker** - Build and push 6 image variants to GHCR on push to main or tagged releases (matrix strategy)
 6. **Helm** - Push Helm chart to GHCR OCI registry (on tag push)
 7. **Publish** - Promote draft release to published (after all jobs pass)
 
@@ -136,12 +139,13 @@ The nuspec is generated inline in the CI workflow. It must include: `title` (dis
 
 ## Docker
 
-A single `docker/Dockerfile` uses multi-stage targets to produce 5 image variants. A shared `base` stage contains all common tools (git, gh CLI, Chromium, Go, Python/uv, skills); each variant adds only its CLI backend:
+A single `docker/Dockerfile` uses multi-stage targets to produce 6 image variants. A shared `base` stage contains all common tools (git, gh CLI, Chromium, Go, Python/uv, skills); each variant adds only its CLI backend:
 
-- `--target all` — All-in-one: Claude Code + Claudish + Codex + Copilot (tagged `latest`)
+- `--target all` — All-in-one: Claude Code + Claudish + Codex + Copilot + Gemini (tagged `latest`)
 - `--target claude` — Claude Code only (tagged `claude`)
 - `--target multi-model` — Claude Code + Multi-Model (tagged `multi-model`)
 - `--target codex` — OpenAI Codex only (tagged `codex`)
 - `--target copilot` — GitHub Copilot only (tagged `copilot`)
+- `--target gemini` — Gemini CLI only (tagged `gemini`)
 
-CI builds and pushes all five variants to GHCR using a matrix strategy. Custom nclaw skills (`schedule`, `send-file`, `webhook`) and third-party skills are included in all variants.
+CI builds and pushes all six variants to GHCR using a matrix strategy. Custom nclaw skills (`schedule`, `send-file`, `webhook`) and third-party skills are included in all variants.
