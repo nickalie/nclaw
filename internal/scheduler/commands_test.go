@@ -11,9 +11,20 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/nickalie/nclaw/internal/cli"
 	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
+
+// mockProvider implements cli.Provider for testing.
+type mockProvider struct{}
+
+func (m *mockProvider) NewClient() cli.Client { return nil }
+func (m *mockProvider) PreInvoke() error      { return nil }
+func (m *mockProvider) Version() (string, error) {
+	return "mock-1.0.0", nil
+}
+func (m *mockProvider) Name() string { return "mock" }
 
 func setupTestScheduler(t *testing.T) *Scheduler {
 	t.Helper()
@@ -23,7 +34,7 @@ func setupTestScheduler(t *testing.T) *Scheduler {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(&model.ScheduledTask{}, &model.TaskRunLog{}))
 
-	sched, err := New(database, "UTC", t.TempDir(), telegram.NewChatLocker())
+	sched, err := New(database, &mockProvider{}, "UTC", t.TempDir(), telegram.NewChatLocker())
 	require.NoError(t, err)
 	return sched
 }

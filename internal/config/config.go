@@ -101,6 +101,20 @@ func LogSecurityWarnings() {
 	}
 }
 
+// CLI returns the configured CLI backend name (default: "claude").
+// Valid values: "claude", "codex", "copilot".
+func CLI() string {
+	if v := viper.GetString("cli"); v != "" {
+		return strings.ToLower(v)
+	}
+	return "claude"
+}
+
+// ValidCLIBackends returns the list of supported CLI backend names.
+func ValidCLIBackends() []string {
+	return []string{"claude", "codex", "copilot"}
+}
+
 // Timezone returns the configured timezone name, defaulting to system local.
 func Timezone() string {
 	if tz := viper.GetString("timezone"); tz != "" {

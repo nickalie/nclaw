@@ -6,17 +6,9 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
-)
 
-// Result holds the output from a Claude CLI invocation.
-type Result struct {
-	// Text is the final assistant message (suitable for display).
-	Text string
-	// FullText contains all assistant messages concatenated.
-	// Useful for scanning command blocks (sendfile, schedule, webhook)
-	// that may appear in non-final messages during multi-turn execution.
-	FullText string
-}
+	"github.com/nickalie/nclaw/internal/cli"
+)
 
 // streamEvent represents a single event from Claude CLI stream-json output.
 type streamEvent struct {
@@ -38,7 +30,7 @@ type contentBlock struct {
 
 // parseStreamOutput parses stream-json (NDJSON) output from Claude CLI
 // and extracts all assistant text and the final result.
-func parseStreamOutput(output []byte) *Result {
+func parseStreamOutput(output []byte) *cli.Result {
 	allText, resultText := collectStreamEvents(output)
 	fullText := strings.Join(allText, "\n")
 
@@ -55,10 +47,10 @@ func parseStreamOutput(output []byte) *Result {
 	// If nothing was parsed (not NDJSON), treat raw output as plain text.
 	if resultText == "" && len(allText) == 0 {
 		text := strings.TrimSpace(string(output))
-		return &Result{Text: text, FullText: text}
+		return &cli.Result{Text: text, FullText: text}
 	}
 
-	return &Result{Text: resultText, FullText: fullText}
+	return &cli.Result{Text: resultText, FullText: fullText}
 }
 
 // collectStreamEvents scans NDJSON lines and collects assistant text and the result.

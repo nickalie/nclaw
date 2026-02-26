@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/nickalie/nclaw/internal/claude"
+	"github.com/nickalie/nclaw/internal/cli"
 	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
@@ -58,18 +58,18 @@ func New(
 }
 
 // Process handles the full post-Claude response workflow:
-//  1. Execute command blocks on FullText (only when claudeErr is nil)
+//  1. Execute command blocks on FullText (only when cliErr is nil)
 //  2. Strip all command block syntax from Text
 //  3. Append execution status messages
 //  4. Send the reply with HTML-then-plain-text fallback
 func (p *Pipeline) Process(
-	ctx context.Context, result *claude.Result, claudeErr error,
+	ctx context.Context, result *cli.Result, cliErr error,
 	chatID int64, threadID int, dir string,
 ) {
 	var statusMsgs []string
 
 	// Phase 1: Execute command blocks (only on success).
-	if claudeErr == nil {
+	if cliErr == nil {
 		for _, exec := range p.executors {
 			if msg := exec.ExecuteBlocks(result.FullText, chatID, threadID); msg != "" {
 				statusMsgs = append(statusMsgs, msg)
