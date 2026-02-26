@@ -1,6 +1,6 @@
 # nclaw
 
-**N**Claw — a**N**other Claw. A lightweight, container-first AI assistant powered by Claude Code, accessible through Telegram. Written in Go.
+**N**Claw — a**N**other Claw. A lightweight, container-first AI coding assistant accessible through Telegram. Supports Claude Code (default), OpenAI Codex, and GitHub Copilot as CLI backends. Written in Go.
 
 ## Table of Contents
 
@@ -36,15 +36,15 @@ There are many Claude Code assistants already — [OpenClaw](https://openclaw.ai
 
 ## How It Works
 
-You message the assistant through Telegram. It invokes the Claude Code CLI, preserving conversation history per chat/topic, and sends back the response.
+You message the assistant through Telegram. It invokes the configured CLI backend (Claude Code by default), preserving conversation history per chat/topic, and sends back the response.
 
 ```
 Telegram  -\
-Scheduler -->  Claude Code CLI  -->  Telegram
+Scheduler -->  CLI Backend  -->  Telegram
 Webhook   -/
 ```
 
-The recommended way to run NClaw is inside Docker — the container serves as a security sandbox, and the image ships with all the tools the assistant might need. However, NClaw is a regular executable and can run directly on any machine with Claude Code CLI installed.
+The recommended way to run NClaw is inside Docker — the container serves as a security sandbox, and the image ships with all the tools the assistant might need. However, NClaw is a regular executable and can run directly on any machine with the chosen CLI backend installed.
 
 ## Features
 
@@ -55,6 +55,7 @@ The recommended way to run NClaw is inside Docker — the container serves as a 
 - **Scheduled tasks** — Create recurring or one-time jobs using natural language.
 - **Webhooks** — Register HTTP endpoints that forward incoming requests to Claude in your chat.
 - **Rich runtime** — Docker image includes git, gh CLI, Chromium, Go, Node.js, Python/uv. The assistant can install additional packages on the fly as needed — for example, `apk add ffmpeg` to process video, `npm install -g prettier` to format code, or `pip install pandas` to analyze data.
+- **Multiple CLI backends** — Supports Claude Code (default), OpenAI Codex, and GitHub Copilot. Switch backends via the `NCLAW_CLI` environment variable.
 - **HTML-formatted replies** — Responses render using Telegram's HTML formatting with plain-text fallback.
 
 ## Docker
@@ -85,6 +86,8 @@ docker run -d --name nclaw \
 ```
 
 The Docker image is based on `node:24-alpine` and includes Claude Code, git, gh CLI, Chromium, Go, Node.js, and Python/uv. The assistant can install any additional packages at runtime as the task requires (e.g. `apk add ffmpeg`, `pip install pandas`, `npm install -g typescript`).
+
+> **Note:** The default Docker image only includes Claude Code CLI. To use Codex or Copilot backends, extend the image or install the CLI at runtime.
 
 ## Kubernetes (Helm)
 
@@ -132,7 +135,7 @@ kubectl create secret generic my-claude-secret \
 
 ## Running without Docker
 
-NClaw is a regular executable and can run directly on any machine. The only runtime dependency is [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) — it must be installed and available in `PATH`.
+NClaw is a regular executable and can run directly on any machine. The only runtime dependency is the CLI for your chosen backend — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default), [OpenAI Codex](https://github.com/openai/codex), or [GitHub Copilot](https://docs.github.com/en/copilot/github-copilot-in-the-cli) — it must be installed and available in `PATH`.
 
 > **Security notice:** Without Docker, Claude Code runs directly on the host with the same permissions as the nclaw process. It has full access to the file system, network, and any credentials available to the user. Run under a dedicated unprivileged user and avoid running as root. For production use, Docker or Kubernetes deployment is strongly recommended.
 
@@ -228,6 +231,7 @@ All variables use the `NCLAW_` prefix.
 |---|---|---|---|
 | `NCLAW_TELEGRAM_BOT_TOKEN` | Yes | — | Telegram bot token from [@BotFather](https://t.me/BotFather) |
 | `NCLAW_DATA_DIR` | Yes | — | Base directory for session data and files |
+| `NCLAW_CLI` | No | `claude` | CLI backend to use: `claude`, `codex`, or `copilot` |
 | `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | No | — | Comma-separated list of allowed Telegram chat IDs. If unset, accepts all chats (with a security warning) |
 | `NCLAW_DB_PATH` | No | `{data_dir}/nclaw.db` | Path to the SQLite database |
 | `NCLAW_TIMEZONE` | No | system local | Timezone for the scheduler (e.g. `Europe/Berlin`) |
@@ -245,6 +249,7 @@ telegram:
   bot_token: "your-telegram-bot-token"
   whitelist_chat_ids: "123456789,987654321"
 
+cli: "claude"  # Options: claude, codex, copilot
 data_dir: "/app/data"
 db_path: "/app/data/nclaw.db"
 timezone: "Europe/Berlin"

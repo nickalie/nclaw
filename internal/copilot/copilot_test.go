@@ -183,30 +183,9 @@ func TestProvider_PreInvoke(t *testing.T) {
 	assert.NoError(t, p.PreInvoke())
 }
 
-// Plain text output tests — Copilot uses -s flag so Text == FullText.
-
-func TestRunAndParse_PlainTextOutput(t *testing.T) {
-	// Copilot's -s (silent) mode outputs plain text directly.
-	// Since we can't mock bin.Run easily, we test the parsing logic
-	// indirectly through the Result equality contract: Text must equal FullText.
+func TestNew_DefaultFields(t *testing.T) {
 	c := New()
-	// Verify that after construction, the struct fields match expectations.
 	assert.Equal(t, "", c.dir)
 	assert.Equal(t, "", c.systemPrompt)
 	assert.False(t, c.skipPermissions)
-}
-
-func TestTextEqualsFullText_Contract(t *testing.T) {
-	// This test documents the key Copilot limitation:
-	// Because -s mode only outputs the final text, Text == FullText.
-	// This means command blocks in intermediate messages won't be captured.
-	// The runAndParse method enforces this by using the same string for both fields.
-	//
-	// We verify this contract by checking the source implementation indirectly:
-	// the test for writeSystemPrompt path confirms the copilot-instructions.md
-	// location, and the prepare tests confirm the -s flag is always present.
-	c := New()
-	c.prepare()
-	args := c.bin.Args()
-	assert.Contains(t, args, "-s", "silent mode must always be enabled for Text==FullText contract")
 }

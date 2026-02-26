@@ -52,7 +52,7 @@ func (c *Copilot) AppendSystemPrompt(prompt string) cli.Client {
 // Ask sends a query and returns the plain text response.
 func (c *Copilot) Ask(query string) (*cli.Result, error) {
 	if err := c.writeSystemPrompt(); err != nil {
-		return nil, fmt.Errorf("copilot: write system prompt: %w", err)
+		return &cli.Result{}, fmt.Errorf("copilot: write system prompt: %w", err)
 	}
 
 	c.prepare()
@@ -62,7 +62,7 @@ func (c *Copilot) Ask(query string) (*cli.Result, error) {
 // Continue sends a query resuming the most recent session.
 func (c *Copilot) Continue(query string) (*cli.Result, error) {
 	if err := c.writeSystemPrompt(); err != nil {
-		return nil, fmt.Errorf("copilot: write system prompt: %w", err)
+		return &cli.Result{}, fmt.Errorf("copilot: write system prompt: %w", err)
 	}
 
 	c.prepareContinue()
@@ -123,6 +123,10 @@ func (c *Copilot) prepareContinue() {
 
 // addCommonArgs adds flags shared between Ask and Continue.
 func (c *Copilot) addCommonArgs() {
+	if c.dir != "" {
+		c.bin.Dir(c.dir)
+	}
+
 	// Silent mode: output only final text.
 	c.bin.Arg("-s")
 

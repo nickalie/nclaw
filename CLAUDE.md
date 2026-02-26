@@ -123,4 +123,4 @@ The nuspec is generated inline in the CI workflow. It must include: `title` (dis
 
 ## Docker
 
-The runtime image (`node:24-alpine` based) includes Claude Code, Go, git, gh CLI, Chromium, and Python/uv. Claude Code skills (`schedule`, `send-file`, `webhook`) are copied into the global skills directory.
+The runtime image (`node:24-alpine` based) includes Claude Code, Go, git, gh CLI, Chromium, and Python/uv. Claude Code skills (`schedule`, `send-file`, `webhook`) are copied into the global skills directory. Codex and Copilot CLIs are not pre-installed; to use those backends in Docker, the image must be extended or the CLI installed at runtime.

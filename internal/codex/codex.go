@@ -52,7 +52,7 @@ func (c *Codex) AppendSystemPrompt(prompt string) cli.Client {
 // Ask sends a query in non-interactive mode and returns the response.
 func (c *Codex) Ask(query string) (*cli.Result, error) {
 	if err := c.writeSystemPrompt(); err != nil {
-		return nil, fmt.Errorf("codex: write system prompt: %w", err)
+		return &cli.Result{}, fmt.Errorf("codex: write system prompt: %w", err)
 	}
 
 	c.prepare()
@@ -62,7 +62,7 @@ func (c *Codex) Ask(query string) (*cli.Result, error) {
 // Continue sends a query resuming the most recent session.
 func (c *Codex) Continue(query string) (*cli.Result, error) {
 	if err := c.writeSystemPrompt(); err != nil {
-		return nil, fmt.Errorf("codex: write system prompt: %w", err)
+		return &cli.Result{}, fmt.Errorf("codex: write system prompt: %w", err)
 	}
 
 	c.prepare("resume", "--last")
