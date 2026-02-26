@@ -17,7 +17,9 @@ Three input channels (handler, scheduler, webhook) each invoke the configured CL
 - `cmd/nclaw/main.go` - Entrypoint: config init, DB setup, bot creation, scheduler start, CLI backend selection
 - `internal/config/` - Viper-based config (env prefix `NCLAW_`, `.env` support, optional `config.yaml`)
 - `internal/cli/` - Generic CLI interfaces (`Client`, `Provider`, `Result`) that all backends implement
+- `internal/cli/streamjson/` - Shared stream-json output parser (used by Claude and Claudish adapters)
 - `internal/claude/` - Claude Code CLI adapter (fluent builder, stream-json parsing, OAuth token refresh)
+- `internal/cli/claudish/` - Multi-model CLI adapter (via OpenRouter, Gemini, OpenAI, Ollama, etc.)
 - `internal/codex/` - OpenAI Codex CLI adapter (JSONL event parsing, AGENTS.md system prompt)
 - `internal/copilot/` - GitHub Copilot CLI adapter (plain text output, `.github/copilot-instructions.md` system prompt)
 - `internal/handler/` - Telegram message handling, file attachments, reply context
@@ -35,7 +37,8 @@ Three input channels (handler, scheduler, webhook) each invoke the configured CL
 All CLI backends implement two interfaces: `cli.Client` (per-request builder with `Dir()`, `SkipPermissions()`, `AppendSystemPrompt()`, `Ask()`, `Continue()`) and `cli.Provider` (singleton with `NewClient()`, `PreInvoke()`, `Version()`, `Name()`). The `*cli.Result` struct has `Text` (final message for display) and `FullText` (all messages for command block scanning). Consumers use only these interfaces, making them backend-agnostic.
 
 ### CLI Adapters
-- **Claude** (`internal/claude/`): Stream-json output parsing. Claude-specific methods (`Model`, `FallbackModel`, `Resume`) remain on the concrete `*Claude` type. `PreInvoke()` handles OAuth token refresh.
+- **Claude** (`internal/claude/`): Stream-json output parsing via shared `streamjson` package. Claude-specific methods (`Model`, `FallbackModel`, `Resume`) remain on the concrete `*Claude` type. `PreInvoke()` handles OAuth token refresh.
+- **Claudish** (`internal/cli/claudish/`): Wraps Claude Code via [claudish](https://github.com/MadAppGang/claudish), proxying API calls to alternative providers (OpenRouter, Gemini, OpenAI, Ollama, LM Studio, etc.). Uses the same stream-json output format as Claude, parsed via the shared `streamjson` package. Passes model config (`--model` flag) and model tier overrides (`CLAUDISH_MODEL_OPUS/SONNET/HAIKU/SUBAGENT`) as environment variables. Provider API keys (e.g. `OPENROUTER_API_KEY`, `GEMINI_API_KEY`) pass through from the OS environment. `PreInvoke()` is a no-op.
 - **Codex** (`internal/codex/`): JSONL event parsing (`item.completed` with `type: "agent_message"`). System prompt written to `AGENTS.md` in the working directory.
 - **Copilot** (`internal/copilot/`): Plain text output via `-s` flag (`Text == FullText`). System prompt written to `.github/copilot-instructions.md`. Known limitation: no structured output, so command blocks in intermediate messages are not captured.
 
@@ -71,7 +74,12 @@ Required env vars (prefix `NCLAW_`):
 - `NCLAW_DATA_DIR` - Base directory for session data and files
 
 Optional:
-- `NCLAW_CLI` - CLI backend to use: `claude` (default), `codex`, or `copilot`
+- `NCLAW_CLI` - CLI backend to use: `claude` (default), `claudish` (multi-model), `codex`, or `copilot`. Auto-selects `claudish` when `NCLAW_MODEL` is set
+- `NCLAW_MODEL` - Model for multi-model backend (e.g. `g@gemini-2.5-pro`, `oai@gpt-4o`)
+- `NCLAW_MODEL_OPUS` - Claudish Opus-tier model override
+- `NCLAW_MODEL_SONNET` - Claudish Sonnet-tier model override
+- `NCLAW_MODEL_HAIKU` - Claudish Haiku-tier model override
+- `NCLAW_MODEL_SUBAGENT` - Claudish subagent model override
 - `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` - Comma-separated list of allowed Telegram chat IDs (if unset, bot accepts all chats with a security warning)
 - `NCLAW_DB_PATH` - SQLite path (default: `{data_dir}/nclaw.db`)
 - `NCLAW_TIMEZONE` - Timezone for scheduler (default: system local)
@@ -86,6 +94,7 @@ make lint            # golangci-lint run ./...
 make test            # CGO_ENABLED=1 go test ./...
 make docker          # Build and run all-in-one image
 make docker-claude   # Build Claude-only image
+make docker-multi-model # Build multi-model image
 make docker-codex    # Build Codex-only image
 make docker-copilot  # Build Copilot-only image
 ```
@@ -117,7 +126,7 @@ GitHub Actions pipeline (`.github/workflows/ci.yml`):
 2. **Test** - `go test -v ./...`
 3. **Release** - GoReleaser cross-compilation (on tag push)
 4. **Chocolatey** - Build and push `.nupkg` to Chocolatey (on tag push, Windows runner)
-5. **Docker** - Build and push 4 image variants to GHCR on push to main or tagged releases (matrix strategy)
+5. **Docker** - Build and push 5 image variants to GHCR on push to main or tagged releases (matrix strategy)
 6. **Helm** - Push Helm chart to GHCR OCI registry (on tag push)
 7. **Publish** - Promote draft release to published (after all jobs pass)
 
@@ -126,11 +135,12 @@ The nuspec is generated inline in the CI workflow. It must include: `title` (dis
 
 ## Docker
 
-A single `docker/Dockerfile` uses multi-stage targets to produce 4 image variants. A shared `base` stage contains all common tools (git, gh CLI, Chromium, Go, Python/uv, skills); each variant adds only its CLI backend:
+A single `docker/Dockerfile` uses multi-stage targets to produce 5 image variants. A shared `base` stage contains all common tools (git, gh CLI, Chromium, Go, Python/uv, skills); each variant adds only its CLI backend:
 
-- `--target all` — All-in-one: Claude Code + Codex + Copilot (tagged `latest`)
+- `--target all` — All-in-one: Claude Code + Claudish + Codex + Copilot (tagged `latest`)
 - `--target claude` — Claude Code only (tagged `claude`)
+- `--target multi-model` — Claude Code + Multi-Model (tagged `multi-model`)
 - `--target codex` — OpenAI Codex only (tagged `codex`)
 - `--target copilot` — GitHub Copilot only (tagged `copilot`)
 
-CI builds and pushes all four variants to GHCR using a matrix strategy. Custom nclaw skills (`schedule`, `send-file`, `webhook`) and third-party skills are included in all variants.
+CI builds and pushes all five variants to GHCR using a matrix strategy. Custom nclaw skills (`schedule`, `send-file`, `webhook`) and third-party skills are included in all variants.

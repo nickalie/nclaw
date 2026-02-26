@@ -130,7 +130,71 @@ func TestCLI_CaseInsensitive(t *testing.T) {
 	assert.Equal(t, "copilot", CLI())
 }
 
+func TestCLI_AutoDetectClaudish(t *testing.T) {
+	viper.Reset()
+	viper.Set("model", "gpt-4o")
+	defer viper.Reset()
+
+	assert.Equal(t, "claudish", CLI())
+}
+
+func TestCLI_ExplicitOverridesAutoDetect(t *testing.T) {
+	viper.Set("cli", "codex")
+	viper.Set("model", "gpt-4o")
+	defer viper.Reset()
+
+	assert.Equal(t, "codex", CLI())
+}
+
+func TestCLI_ExplicitClaudishWithoutModel(t *testing.T) {
+	viper.Set("cli", "claudish")
+	defer viper.Reset()
+
+	assert.Equal(t, "claudish", CLI())
+}
+
 func TestValidCLIBackends(t *testing.T) {
 	backends := ValidCLIBackends()
-	assert.Equal(t, []string{"claude", "codex", "copilot"}, backends)
+	assert.Equal(t, []string{"claude", "claudish", "codex", "copilot"}, backends)
+}
+
+func TestModel(t *testing.T) {
+	viper.Set("model", "gpt-4o")
+	defer viper.Reset()
+
+	assert.Equal(t, "gpt-4o", Model())
+}
+
+func TestModel_Empty(t *testing.T) {
+	viper.Reset()
+
+	assert.Equal(t, "", Model())
+}
+
+func TestModelOpus(t *testing.T) {
+	viper.Set("model_opus", "claude-opus-4-6")
+	defer viper.Reset()
+
+	assert.Equal(t, "claude-opus-4-6", ModelOpus())
+}
+
+func TestModelSonnet(t *testing.T) {
+	viper.Set("model_sonnet", "claude-sonnet-4-6")
+	defer viper.Reset()
+
+	assert.Equal(t, "claude-sonnet-4-6", ModelSonnet())
+}
+
+func TestModelHaiku(t *testing.T) {
+	viper.Set("model_haiku", "claude-haiku-4-5-20251001")
+	defer viper.Reset()
+
+	assert.Equal(t, "claude-haiku-4-5-20251001", ModelHaiku())
+}
+
+func TestModelSubagent(t *testing.T) {
+	viper.Set("model_subagent", "gpt-4o-mini")
+	defer viper.Reset()
+
+	assert.Equal(t, "gpt-4o-mini", ModelSubagent())
 }

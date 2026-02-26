@@ -1,4 +1,4 @@
-package claude
+package streamjson
 
 import (
 	"bufio"
@@ -10,7 +10,7 @@ import (
 	"github.com/nickalie/nclaw/internal/cli"
 )
 
-// streamEvent represents a single event from Claude CLI stream-json output.
+// streamEvent represents a single event from stream-json (NDJSON) output.
 type streamEvent struct {
 	Type    string          `json:"type"`
 	Message json.RawMessage `json:"message,omitempty"`
@@ -28,9 +28,9 @@ type contentBlock struct {
 	Text string `json:"text,omitempty"`
 }
 
-// parseStreamOutput parses stream-json (NDJSON) output from Claude CLI
-// and extracts all assistant text and the final result.
-func parseStreamOutput(output []byte) *cli.Result {
+// ParseOutput parses stream-json (NDJSON) output and extracts all assistant
+// text and the final result into a cli.Result.
+func ParseOutput(output []byte) *cli.Result {
 	allText, resultText := collectStreamEvents(output)
 	fullText := strings.Join(allText, "\n")
 
@@ -38,13 +38,10 @@ func parseStreamOutput(output []byte) *cli.Result {
 		resultText = fullText
 	}
 
-	// Ensure FullText always contains at least what Text contains,
-	// e.g. when a result event exists but no assistant events were emitted.
 	if fullText == "" && resultText != "" {
 		fullText = resultText
 	}
 
-	// If nothing was parsed (not NDJSON), treat raw output as plain text.
 	if resultText == "" && len(allText) == 0 {
 		text := strings.TrimSpace(string(output))
 		return &cli.Result{Text: text, FullText: text}
@@ -53,7 +50,6 @@ func parseStreamOutput(output []byte) *cli.Result {
 	return &cli.Result{Text: resultText, FullText: fullText}
 }
 
-// collectStreamEvents scans NDJSON lines and collects assistant text and the result.
 func collectStreamEvents(output []byte) (allText []string, resultText string) {
 	scanner := bufio.NewScanner(bytes.NewReader(output))
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -80,13 +76,12 @@ func collectStreamEvents(output []byte) (allText []string, resultText string) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("claude: stream scan error (output may be truncated): %v", err)
+		log.Printf("streamjson: scan error (output may be truncated): %v", err)
 	}
 
 	return allText, resultText
 }
 
-// extractAssistantText extracts text content from an assistant message JSON.
 func extractAssistantText(msg json.RawMessage) string {
 	if len(msg) == 0 {
 		return ""

@@ -102,17 +102,46 @@ func LogSecurityWarnings() {
 }
 
 // CLI returns the configured CLI backend name (default: "claude").
-// Valid values: "claude", "codex", "copilot".
+// If "cli" is not explicitly set but "model" is set, returns "claudish" (auto-detection).
+// Valid values: "claude", "codex", "copilot", "claudish".
 func CLI() string {
 	if v := viper.GetString("cli"); v != "" {
 		return strings.ToLower(v)
+	}
+	if viper.GetString("model") != "" {
+		return "claudish"
 	}
 	return "claude"
 }
 
 // ValidCLIBackends returns the list of supported CLI backend names.
 func ValidCLIBackends() []string {
-	return []string{"claude", "codex", "copilot"}
+	return []string{"claude", "claudish", "codex", "copilot"}
+}
+
+// Model returns the configured model name (env: NCLAW_MODEL).
+func Model() string {
+	return viper.GetString("model")
+}
+
+// ModelOpus returns the configured Opus-tier model override (env: NCLAW_MODEL_OPUS).
+func ModelOpus() string {
+	return viper.GetString("model_opus")
+}
+
+// ModelSonnet returns the configured Sonnet-tier model override (env: NCLAW_MODEL_SONNET).
+func ModelSonnet() string {
+	return viper.GetString("model_sonnet")
+}
+
+// ModelHaiku returns the configured Haiku-tier model override (env: NCLAW_MODEL_HAIKU).
+func ModelHaiku() string {
+	return viper.GetString("model_haiku")
+}
+
+// ModelSubagent returns the configured subagent model override (env: NCLAW_MODEL_SUBAGENT).
+func ModelSubagent() string {
+	return viper.GetString("model_subagent")
 }
 
 // Timezone returns the configured timezone name, defaulting to system local.

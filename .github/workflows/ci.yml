@@ -72,6 +72,7 @@ jobs:
           - { name: "Claude", suffix: "-claude", target: "claude" }
           - { name: "Codex", suffix: "-codex", target: "codex" }
           - { name: "Copilot", suffix: "-copilot", target: "copilot" }
+          - { name: "Multi-Model", suffix: "-multi-model", target: "multi-model" }
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

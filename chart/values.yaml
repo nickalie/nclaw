@@ -20,8 +20,15 @@ env:
   whitelistChatIds: ""
   # Base domain for webhook URLs
   webhookBaseDomain: ""
-  # CLI backend: claude, codex, or copilot (empty = image default)
+  # CLI backend: claude, claudish, codex, or copilot (empty = image default)
   cli: ""
+  # Model for claudish (e.g. g@gemini-2.5-pro). Setting this auto-selects claudish
+  model: ""
+  # Claudish model tier overrides
+  modelOpus: ""
+  modelSonnet: ""
+  modelHaiku: ""
+  modelSubagent: ""
 
 # Reference an existing secret for sensitive env vars
 # Secret must contain key "telegram-bot-token"
@@ -64,3 +71,7 @@ codexCredentialsSecret: ""
 # Copilot credentials to mount into /root/.copilot/config.json
 # Provide via secret — the key must be "config.json"
 copilotCredentialsSecret: ""
+
+# Claudish API keys secret — keys are injected as env vars via envFrom.
+# Use the provider's native env var name as the key (e.g. OPENROUTER_API_KEY, GEMINI_API_KEY).
+claudishApiKeysSecret: ""
