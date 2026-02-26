@@ -73,6 +73,7 @@ jobs:
           - { name: "Codex", suffix: "-codex", target: "codex" }
           - { name: "Copilot", suffix: "-copilot", target: "copilot" }
           - { name: "Multi-Model", suffix: "-multi-model", target: "multi-model" }
+          - { name: "Gemini", suffix: "-gemini", target: "gemini" }
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

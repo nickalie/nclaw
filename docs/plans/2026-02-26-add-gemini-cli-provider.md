@@ -80,12 +80,12 @@ Add Google's Gemini CLI (`gemini`) as a new CLI backend, following the same prov
 - Modify: `.github/workflows/ci.yml`
 - Modify: `Makefile`
 
-- [ ] Add `gemini` stage in Dockerfile: `FROM base AS gemini`, install `@google/gemini-cli` via npm, copy skills
-- [ ] Add gemini variant to `all` target (install alongside other CLIs)
-- [ ] Add `{ name: "Gemini", suffix: "-gemini", target: "gemini" }` to CI matrix
-- [ ] Add `docker-gemini` target to Makefile
-- [ ] Add `.PHONY` entry for `docker-gemini`
-- [ ] Run project test suite - must pass before task 5
+- [x] Add `gemini` stage in Dockerfile: `FROM base AS gemini`, install `@google/gemini-cli` via npm, copy skills
+- [x] Add gemini variant to `all` target (install alongside other CLIs)
+- [x] Add `{ name: "Gemini", suffix: "-gemini", target: "gemini" }` to CI matrix
+- [x] Add `docker-gemini` target to Makefile
+- [x] Add `.PHONY` entry for `docker-gemini`
+- [x] Run project test suite - must pass before task 5
 
 ### Task 5: Update documentation
 

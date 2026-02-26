@@ -1,4 +1,4 @@
-.PHONY: run lint test docker docker-claude docker-multi-model docker-codex docker-copilot smoke-test
+.PHONY: run lint test docker docker-claude docker-multi-model docker-codex docker-copilot docker-gemini smoke-test
 
 VERSION    ?= dev
 COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -37,6 +37,9 @@ docker-codex:
 
 docker-copilot:
 	docker build -f docker/Dockerfile --target copilot -t nclaw:copilot .
+
+docker-gemini:
+	docker build -f docker/Dockerfile --target gemini -t nclaw:gemini .
 
 smoke-test:
 	./test/install/smoke-test.sh $(TESTS)

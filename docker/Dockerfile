@@ -94,11 +94,20 @@ RUN mkdir -p /root/.copilot/skills && \
     cp -r /root/.claude/skills/* /root/.copilot/skills/ && \
     cp -r /opt/nclaw-skills/* /root/.copilot/skills/
 
+# ---------- gemini ----------
+FROM base AS gemini
+RUN npm install -g @google/gemini-cli
+RUN mkdir -p /root/.gemini/skills && \
+    cp -r /root/.claude/skills/* /root/.gemini/skills/ && \
+    cp -r /opt/nclaw-skills/* /root/.gemini/skills/
+
 # ---------- all-in-one (default) ----------
 FROM claude AS all
 RUN npm install -g claudish
 RUN npm install -g @openai/codex
 RUN npm install -g @githubnext/github-copilot-cli
-RUN mkdir -p /root/.codex/skills /root/.copilot/skills && \
+RUN npm install -g @google/gemini-cli
+RUN mkdir -p /root/.codex/skills /root/.copilot/skills /root/.gemini/skills && \
     cp -r /root/.claude/skills/* /root/.codex/skills/ && \
-    cp -r /root/.claude/skills/* /root/.copilot/skills/
+    cp -r /root/.claude/skills/* /root/.copilot/skills/ && \
+    cp -r /root/.claude/skills/* /root/.gemini/skills/
