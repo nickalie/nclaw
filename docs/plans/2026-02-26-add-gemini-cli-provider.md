@@ -50,17 +50,17 @@ Add Google's Gemini CLI (`gemini`) as a new CLI backend, following the same prov
 - Create: `internal/cli/gemini/gemini.go`
 - Create: `internal/cli/gemini/provider.go`
 
-- [ ] Implement `Gemini` struct with fields: `bin`, `dir`, `systemPrompt`, `skipPermissions`, `model`
-- [ ] Implement `cli.Client` interface: `Dir()`, `SkipPermissions()`, `AppendSystemPrompt()`, `Ask()`, `Continue()`
-- [ ] `Ask()`: writes GEMINI.md, runs `gemini -p <query> --output-format stream-json`, parses output
-- [ ] `Continue()`: same as Ask but adds `--resume latest`
-- [ ] `SkipPermissions()`: sets `--approval-mode yolo`
-- [ ] `writeSystemPrompt()`: writes `GEMINI.md` in working directory (same pattern as Copilot)
-- [ ] Implement `Provider` struct (stateless, like Copilot). `PreInvoke()` is no-op. `Name()` returns "gemini"
-- [ ] `Version()`: runs `gemini --version`
-- [ ] Add compile-time interface assertions (`var _ cli.Provider = (*Provider)(nil)`, etc.)
-- [ ] Write tests for client and provider
-- [ ] Run project test suite - must pass before task 3
+- [x] Implement `Gemini` struct with fields: `bin`, `dir`, `systemPrompt`, `skipPermissions`, `model`
+- [x] Implement `cli.Client` interface: `Dir()`, `SkipPermissions()`, `AppendSystemPrompt()`, `Ask()`, `Continue()`
+- [x] `Ask()`: writes GEMINI.md, runs `gemini -p <query> --output-format stream-json`, parses output
+- [x] `Continue()`: same as Ask but adds `--resume latest`
+- [x] `SkipPermissions()`: sets `--approval-mode yolo`
+- [x] `writeSystemPrompt()`: writes `GEMINI.md` in working directory (same pattern as Copilot)
+- [x] Implement `Provider` struct (stateless, like Copilot). `PreInvoke()` is no-op. `Name()` returns "gemini"
+- [x] `Version()`: runs `gemini --version`
+- [x] Add compile-time interface assertions (`var _ cli.Provider = (*Provider)(nil)`, etc.)
+- [x] Write tests for client and provider
+- [x] Run project test suite - must pass before task 3
 
 ### Task 3: Register Gemini backend in config and main
 
