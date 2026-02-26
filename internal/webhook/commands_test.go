@@ -11,11 +11,33 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/nickalie/nclaw/internal/cli"
 	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/pipeline"
 	"github.com/nickalie/nclaw/internal/sendfile"
 	"github.com/nickalie/nclaw/internal/telegram"
 )
+
+// mockProvider implements cli.Provider for testing.
+type mockProvider struct{}
+
+func (m *mockProvider) NewClient() cli.Client    { return &mockClient{} }
+func (m *mockProvider) PreInvoke() error         { return nil }
+func (m *mockProvider) Version() (string, error) { return "mock-1.0.0", nil }
+func (m *mockProvider) Name() string             { return "mock" }
+
+// mockClient implements cli.Client for testing.
+type mockClient struct{}
+
+func (m *mockClient) Dir(string) cli.Client                { return m }
+func (m *mockClient) SkipPermissions() cli.Client          { return m }
+func (m *mockClient) AppendSystemPrompt(string) cli.Client { return m }
+func (m *mockClient) Ask(string) (*cli.Result, error) {
+	return &cli.Result{Text: "mock response", FullText: "mock response"}, nil
+}
+func (m *mockClient) Continue(string) (*cli.Result, error) {
+	return &cli.Result{Text: "mock response", FullText: "mock response"}, nil
+}
 
 func noopSend(_ context.Context, _ int64, _ int, _, _ string) error { return nil }
 
@@ -27,7 +49,7 @@ func setupTestManager(t *testing.T) *Manager {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(&model.WebhookRegistration{}))
 
-	mgr := NewManager(database, "example.com", t.TempDir(), telegram.NewChatLocker())
+	mgr := NewManager(database, &mockProvider{}, "example.com", t.TempDir(), telegram.NewChatLocker())
 	mgr.SetPipeline(pipeline.New(noopSend, sendfile.Senders{}, true))
 	return mgr
 }

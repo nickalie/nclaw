@@ -8,7 +8,11 @@ import (
 	"time"
 
 	"github.com/nickalie/go-binwrapper"
+	"github.com/nickalie/nclaw/internal/cli"
 )
+
+// Compile-time check: *Claude implements cli.Client.
+var _ cli.Client = (*Claude)(nil)
 
 // outputFormat represents the output format for the CLI.
 type outputFormat string
@@ -57,7 +61,7 @@ func (c *Claude) BinPath(path string) *Claude {
 }
 
 // Dir sets the working directory for the claude process.
-func (c *Claude) Dir(dir string) *Claude {
+func (c *Claude) Dir(dir string) cli.Client {
 	c.dir = dir
 	return c
 }
@@ -81,7 +85,7 @@ func (c *Claude) SystemPrompt(prompt string) *Claude {
 }
 
 // AppendSystemPrompt appends custom text to the default system prompt.
-func (c *Claude) AppendSystemPrompt(prompt string) *Claude {
+func (c *Claude) AppendSystemPrompt(prompt string) cli.Client {
 	c.appendPrompt = prompt
 	return c
 }
@@ -142,7 +146,7 @@ func (c *Claude) AddDirs(dirs ...string) *Claude {
 
 // SkipPermissions enables skipping all permission prompts.
 // Use with caution.
-func (c *Claude) SkipPermissions() *Claude {
+func (c *Claude) SkipPermissions() cli.Client {
 	c.skipPermissions = true
 	return c
 }
@@ -179,7 +183,7 @@ func (c *Claude) Env(vars []string) *Claude {
 
 // Ask sends a query in print mode and returns the response.
 // Uses stream-json output to capture all assistant messages across multi-turn execution.
-func (c *Claude) Ask(query string) (*Result, error) {
+func (c *Claude) Ask(query string) (*cli.Result, error) {
 	c.outputFormat = formatStreamJSON
 	c.verbose = true
 	c.prepare("-p")
@@ -188,7 +192,7 @@ func (c *Claude) Ask(query string) (*Result, error) {
 
 // Continue sends a query continuing the most recent conversation in the current directory.
 // Uses stream-json output to capture all assistant messages across multi-turn execution.
-func (c *Claude) Continue(query string) (*Result, error) {
+func (c *Claude) Continue(query string) (*cli.Result, error) {
 	c.outputFormat = formatStreamJSON
 	c.verbose = true
 	c.prepare("-c", "-p")
@@ -197,7 +201,7 @@ func (c *Claude) Continue(query string) (*Result, error) {
 
 // Resume sends a query resuming a specific session by ID or name.
 // Uses stream-json output to capture all assistant messages across multi-turn execution.
-func (c *Claude) Resume(session, query string) (*Result, error) {
+func (c *Claude) Resume(session, query string) (*cli.Result, error) {
 	c.outputFormat = formatStreamJSON
 	c.verbose = true
 	c.prepare("-r", session, "-p")
@@ -205,12 +209,12 @@ func (c *Claude) Resume(session, query string) (*Result, error) {
 }
 
 // runAndParse executes the CLI and parses stream-json output into a Result.
-func (c *Claude) runAndParse(query string) (*Result, error) {
+func (c *Claude) runAndParse(query string) (*cli.Result, error) {
 	if err := c.bin.Run(query); err != nil {
 		result := parseStreamOutput(c.bin.StdOut())
 		if result.Text == "" && result.FullText == "" {
 			text := strings.TrimSpace(string(c.bin.CombinedOutput()))
-			result = &Result{Text: text, FullText: text}
+			result = &cli.Result{Text: text, FullText: text}
 		}
 		return result, fmt.Errorf("claude: %w", err)
 	}
