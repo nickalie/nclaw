@@ -103,7 +103,7 @@ func LogSecurityWarnings() {
 
 // CLI returns the configured CLI backend name (default: "claude").
 // If "cli" is not explicitly set but "model" is set, returns "claudish" (auto-detection).
-// Valid values: "claude", "codex", "copilot", "claudish".
+// Valid values: "claude", "codex", "copilot", "claudish", "gemini".
 func CLI() string {
 	if v := viper.GetString("cli"); v != "" {
 		return strings.ToLower(v)
@@ -116,7 +116,7 @@ func CLI() string {
 
 // ValidCLIBackends returns the list of supported CLI backend names.
 func ValidCLIBackends() []string {
-	return []string{"claude", "claudish", "codex", "copilot"}
+	return []string{"claude", "claudish", "codex", "copilot", "gemini"}
 }
 
 // Model returns the configured model name (env: NCLAW_MODEL).

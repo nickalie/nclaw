@@ -19,6 +19,7 @@ import (
 	"github.com/nickalie/nclaw/internal/cli/claudish"
 	"github.com/nickalie/nclaw/internal/cli/codex"
 	"github.com/nickalie/nclaw/internal/cli/copilot"
+	"github.com/nickalie/nclaw/internal/cli/gemini"
 	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/handler"
@@ -169,6 +170,8 @@ func newProvider(backend string) (cli.Provider, error) {
 		return codex.NewProvider(), nil
 	case "copilot":
 		return copilot.NewProvider(), nil
+	case "gemini":
+		return gemini.NewProvider(), nil
 	default:
 		return nil, fmt.Errorf("unsupported cli backend %q (valid: %v)", backend, config.ValidCLIBackends())
 	}

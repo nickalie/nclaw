@@ -155,7 +155,7 @@ func TestCLI_ExplicitClaudishWithoutModel(t *testing.T) {
 
 func TestValidCLIBackends(t *testing.T) {
 	backends := ValidCLIBackends()
-	assert.Equal(t, []string{"claude", "claudish", "codex", "copilot"}, backends)
+	assert.Equal(t, []string{"claude", "claudish", "codex", "copilot", "gemini"}, backends)
 }
 
 func TestModel(t *testing.T) {

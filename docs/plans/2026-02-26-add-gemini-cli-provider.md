@@ -68,10 +68,10 @@ Add Google's Gemini CLI (`gemini`) as a new CLI backend, following the same prov
 - Modify: `internal/config/config.go`
 - Modify: `cmd/nclaw/main.go`
 
-- [ ] Add "gemini" to `ValidCLIBackends()` return value
-- [ ] Add `case "gemini"` in `newProvider()` switch in `main.go`, returning `gemini.NewProvider()`
-- [ ] Update existing tests for `ValidCLIBackends` to include "gemini"
-- [ ] Run project test suite - must pass before task 4
+- [x] Add "gemini" to `ValidCLIBackends()` return value
+- [x] Add `case "gemini"` in `newProvider()` switch in `main.go`, returning `gemini.NewProvider()`
+- [x] Update existing tests for `ValidCLIBackends` to include "gemini"
+- [x] Run project test suite - must pass before task 4
 
 ### Task 4: Add Docker and CI support
 
