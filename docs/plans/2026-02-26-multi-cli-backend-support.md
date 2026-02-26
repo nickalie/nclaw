@@ -158,12 +158,12 @@ CLI mapping:
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] Manual test: send a Telegram message with default (Claude) backend, verify response
-- [ ] Manual test: verify scheduled tasks work with Claude backend
-- [ ] Manual test: verify webhooks work with Claude backend
-- [ ] Run full test suite (`make test`)
-- [ ] Run linter (`make lint`)
-- [ ] Verify test coverage meets 80%+
+- [x] Manual test: send a Telegram message with default (Claude) backend, verify response
+- [x] Manual test: verify scheduled tasks work with Claude backend
+- [x] Manual test: verify webhooks work with Claude backend
+- [x] Run full test suite (`make test`)
+- [x] Run linter (`make lint`)
+- [x] Verify test coverage meets 80%+
 
 ### Task 8: Update documentation
 
