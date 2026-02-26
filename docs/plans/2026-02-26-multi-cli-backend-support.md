@@ -71,13 +71,13 @@ Key design decisions:
 - Modify: `internal/claude/claude_test.go`
 - Modify: `internal/claude/result_test.go`
 
-- [ ] Remove `Result` from `claude/result.go`, use `cli.Result` throughout the package
-- [ ] Update `parseStreamOutput` and related functions to return `*cli.Result`
-- [ ] Change builder methods (`Dir`, `SkipPermissions`, `AppendSystemPrompt`) to return `cli.Client`
-- [ ] Create `provider.go` with `Provider` struct: wraps `EnsureValidToken()` as `PreInvoke()`, `New()` as `NewClient()`, existing `Version()` logic
-- [ ] Keep all Claude-specific methods (Model, FallbackModel, Resume, etc.) on the concrete `*Claude` type
-- [ ] Update all existing tests
-- [ ] Run project test suite - must pass before task 3
+- [x] Remove `Result` from `claude/result.go`, use `cli.Result` throughout the package
+- [x] Update `parseStreamOutput` and related functions to return `*cli.Result`
+- [x] Change builder methods (`Dir`, `SkipPermissions`, `AppendSystemPrompt`) to return `cli.Client`
+- [x] Create `provider.go` with `Provider` struct: wraps `EnsureValidToken()` as `PreInvoke()`, `New()` as `NewClient()`, existing `Version()` logic
+- [x] Keep all Claude-specific methods (Model, FallbackModel, Resume, etc.) on the concrete `*Claude` type
+- [x] Update all existing tests
+- [x] Run project test suite - must pass before task 3
 
 ### Task 3: Update consumers to use CLI interfaces
 
