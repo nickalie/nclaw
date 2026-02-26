@@ -167,5 +167,5 @@ CLI mapping:
 
 ### Task 8: Update documentation
 
-- [ ] Update CLAUDE.md: add `internal/cli/` to project structure, document CLI interface pattern, add `NCLAW_CLI` to config section, note codex/copilot packages
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Update CLAUDE.md: add `internal/cli/` to project structure, document CLI interface pattern, add `NCLAW_CLI` to config section, note codex/copilot packages
+- [x] Move this plan to `docs/plans/completed/`

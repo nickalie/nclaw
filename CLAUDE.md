@@ -1,55 +1,61 @@
 # nclaw
 
-Telegram bot that wraps the Claude Code CLI. Users message a Telegram bot, which invokes Claude Code in a Docker container and returns the response. Each chat/thread gets its own persistent Claude session.
+Telegram bot that wraps AI coding CLIs (Claude Code, OpenAI Codex, GitHub Copilot). Users message a Telegram bot, which invokes the configured CLI backend in a Docker container and returns the response. Each chat/thread gets its own persistent session.
 
 ## Architecture
 
 ```
 Telegram -> Handler  -\
-Scheduler ------------>  Claude Code CLI -> Pipeline.Process() -> Telegram
+Scheduler ------------>  CLI Backend (cli.Provider) -> Pipeline.Process() -> Telegram
 Webhook  ----------->/
 ```
 
-Three input channels (handler, scheduler, webhook) each invoke the Claude CLI independently. All post-Claude processing (command block execution, stripping, sendfile, reply delivery) is handled by a shared `Pipeline.Process()` call, ensuring consistent behavior across all channels.
+Three input channels (handler, scheduler, webhook) each invoke the configured CLI backend via the `cli.Provider` interface. All post-processing (command block execution, stripping, sendfile, reply delivery) is handled by a shared `Pipeline.Process()` call, ensuring consistent behavior across all channels and backends.
 
 ## Project Structure
 
-- `cmd/nclaw/main.go` - Entrypoint: config init, DB setup, bot creation, scheduler start
+- `cmd/nclaw/main.go` - Entrypoint: config init, DB setup, bot creation, scheduler start, CLI backend selection
 - `internal/config/` - Viper-based config (env prefix `NCLAW_`, `.env` support, optional `config.yaml`)
+- `internal/cli/` - Generic CLI interfaces (`Client`, `Provider`, `Result`) that all backends implement
+- `internal/claude/` - Claude Code CLI adapter (fluent builder, stream-json parsing, OAuth token refresh)
+- `internal/codex/` - OpenAI Codex CLI adapter (JSONL event parsing, AGENTS.md system prompt)
+- `internal/copilot/` - GitHub Copilot CLI adapter (plain text output, `.github/copilot-instructions.md` system prompt)
 - `internal/handler/` - Telegram message handling, file attachments, reply context
-- `internal/claude/` - Claude Code CLI wrapper using `go-binwrapper` (fluent builder API), plus OAuth token refresh
-- `internal/pipeline/` - Unified post-Claude processing: block execution, stripping, sendfile, reply delivery
+- `internal/pipeline/` - Unified post-processing: block execution, stripping, sendfile, reply delivery
 - `internal/sendfile/` - Shared sendfile processing: parses `nclaw:sendfile` blocks, validates paths, sends documents
 - `internal/model/` - GORM models: `ScheduledTask`, `TaskRunLog`, `WebhookRegistration`
 - `internal/db/` - Database operations (SQLite with WAL mode)
-- `internal/scheduler/` - Task scheduling via `gocron`, command parsing from Claude replies
-- `internal/webhook/` - GoFiber HTTP server, webhook manager, and command parsing from Claude replies
+- `internal/scheduler/` - Task scheduling via `gocron`, command parsing from CLI replies
+- `internal/webhook/` - GoFiber HTTP server, webhook manager, and command parsing from CLI replies
 - `data/` - Runtime data directory (gitignored)
 
 ## Key Patterns
 
-### Claude CLI Integration
-The `claude` package wraps the CLI binary with a fluent builder. The handler calls `claude.New().Dir(dir).SkipPermissions().AppendSystemPrompt(prompt).Continue(query)` to continue the session in a per-chat directory. `Ask()`, `Continue()`, and `Resume()` use `--output-format stream-json` and return a `*Result` with two fields:
-- `Text` — the final assistant message (from the stream-json `result` event), used for display.
-- `FullText` — all assistant messages concatenated, used for scanning command blocks that may appear in intermediate messages during multi-turn execution.
+### CLI Backend Interface (`internal/cli/`)
+All CLI backends implement two interfaces: `cli.Client` (per-request builder with `Dir()`, `SkipPermissions()`, `AppendSystemPrompt()`, `Ask()`, `Continue()`) and `cli.Provider` (singleton with `NewClient()`, `PreInvoke()`, `Version()`, `Name()`). The `*cli.Result` struct has `Text` (final message for display) and `FullText` (all messages for command block scanning). Consumers use only these interfaces, making them backend-agnostic.
+
+### CLI Adapters
+- **Claude** (`internal/claude/`): Stream-json output parsing. Claude-specific methods (`Model`, `FallbackModel`, `Resume`) remain on the concrete `*Claude` type. `PreInvoke()` handles OAuth token refresh.
+- **Codex** (`internal/codex/`): JSONL event parsing (`item.completed` with `type: "agent_message"`). System prompt written to `AGENTS.md` in the working directory.
+- **Copilot** (`internal/copilot/`): Plain text output via `-s` flag (`Text == FullText`). System prompt written to `.github/copilot-instructions.md`. Known limitation: no structured output, so command blocks in intermediate messages are not captured.
 
 ### OAuth Token Refresh
-Before each CLI invocation (in handler and scheduler), `claude.EnsureValidToken()` proactively refreshes the OAuth token if it expires within 5 minutes. Credentials are read from `~/.claude/.credentials.json` using field-preserving JSON round-tripping. Refresh failures are logged as warnings and do not block the CLI call.
+Before each Claude CLI invocation, `claude.EnsureValidToken()` (called via `Provider.PreInvoke()`) proactively refreshes the OAuth token if it expires within 5 minutes. Credentials are read from `~/.claude/.credentials.json` using field-preserving JSON round-tripping. Refresh failures are logged as warnings and do not block the CLI call. Codex and Copilot providers have no-op `PreInvoke()`.
 
 ### Unified Pipeline (`internal/pipeline/`)
-All post-Claude processing goes through `Pipeline.Process()`, which:
-1. **Execute** — Runs each `BlockExecutor.ExecuteBlocks()` on `Result.FullText` (all assistant messages), plus `sendfile.ExecuteBlocks()`. Skipped when Claude returned an error.
+All post-CLI processing goes through `Pipeline.Process()`, which:
+1. **Execute** — Runs each `BlockExecutor.ExecuteBlocks()` on `Result.FullText` (all assistant messages), plus `sendfile.ExecuteBlocks()`. Skipped when the CLI returned an error.
 2. **Strip** — Removes all command block syntax (`nclaw:sendfile`, `nclaw:schedule`, `nclaw:webhook`) from `Result.Text`.
 3. **Append status** — Adds status/error messages from block execution.
 4. **Send reply** — Delivers the final text via Telegram with HTML-then-plain-text fallback, splitting long messages.
 
-The scheduler and webhook manager implement the `BlockExecutor` interface and are passed to the pipeline as executors. The handler, scheduler, and webhook packages each invoke Claude independently, then call `Pipeline.Process()` for all post-processing.
+The scheduler and webhook manager implement the `BlockExecutor` interface and are passed to the pipeline as executors. The handler, scheduler, and webhook packages each invoke the CLI backend independently, then call `Pipeline.Process()` for all post-processing.
 
 ### Scheduled Tasks
 `nclaw:schedule` code blocks contain JSON commands (`create`, `pause`, `resume`, `cancel`). Tasks support cron, interval, and one-time schedules. Tasks persist in SQLite and reload on startup. The scheduler implements `BlockExecutor` for the pipeline.
 
 ### Webhooks
-`nclaw:webhook` code blocks contain JSON commands (`create`, `delete`, `list`). Webhooks register HTTP endpoints at `https://{BASE_DOMAIN}/webhooks/{UUID}`. When an external service calls a webhook URL, the request (method, headers, query params, body) is forwarded to Claude in the originating chat via `Continue()`. The HTTP server returns 200 immediately; Claude processing happens asynchronously in a goroutine. Webhooks persist in SQLite alongside scheduled tasks. The webhook manager implements `BlockExecutor` for the pipeline.
+`nclaw:webhook` code blocks contain JSON commands (`create`, `delete`, `list`). Webhooks register HTTP endpoints at `https://{BASE_DOMAIN}/webhooks/{UUID}`. When an external service calls a webhook URL, the request (method, headers, query params, body) is forwarded to the CLI backend in the originating chat via `Continue()`. The HTTP server returns 200 immediately; CLI processing happens asynchronously in a goroutine. Webhooks persist in SQLite alongside scheduled tasks. The webhook manager implements `BlockExecutor` for the pipeline.
 
 ### File Handling
 - **Inbound**: Attachments (documents, photos, audio, video, stickers) are downloaded to the chat directory and referenced in prompts. Files are cached by unique ID and size.
@@ -65,6 +71,7 @@ Required env vars (prefix `NCLAW_`):
 - `NCLAW_DATA_DIR` - Base directory for session data and files
 
 Optional:
+- `NCLAW_CLI` - CLI backend to use: `claude` (default), `codex`, or `copilot`
 - `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` - Comma-separated list of allowed Telegram chat IDs (if unset, bot accepts all chats with a security warning)
 - `NCLAW_DB_PATH` - SQLite path (default: `{data_dir}/nclaw.db`)
 - `NCLAW_TIMEZONE` - Timezone for scheduler (default: system local)
@@ -92,7 +99,7 @@ make docker  # Build and run in Docker
 
 - Go 1.25
 - `github.com/go-telegram/bot` - Telegram bot framework
-- `github.com/nickalie/go-binwrapper` - Binary wrapper for Claude CLI
+- `github.com/nickalie/go-binwrapper` - Binary wrapper for CLI backends (Claude, Codex, Copilot)
 - `github.com/spf13/viper` + `github.com/joho/godotenv` - Configuration
 - `gorm.io/gorm` + `gorm.io/driver/sqlite` - Database
 - `github.com/go-co-op/gocron/v2` - Task scheduling
