@@ -7,6 +7,10 @@
 - [Why NClaw](#why-nclaw)
 - [How It Works](#how-it-works)
 - [Features](#features)
+- [Quickstart](#quickstart)
+  - [Step 1: Create a Telegram Bot](#step-1-create-a-telegram-bot)
+  - [Step 2: Find Your Chat ID](#step-2-find-your-chat-id)
+  - [Step 3: Run NClaw](#step-3-run-nclaw)
 - [Docker](#docker)
 - [Multi-Model](#multi-model-1)
 - [Kubernetes (Helm)](#kubernetes-helm)
@@ -58,6 +62,87 @@ The recommended way to run NClaw is inside Docker — the container serves as a 
 - **Rich runtime** — Docker image includes git, gh CLI, Chromium, Go, Node.js, Python/uv. The assistant can install additional packages on the fly as needed — for example, `apk add ffmpeg` to process video, `npm install -g prettier` to format code, or `pip install pandas` to analyze data.
 - **Multiple CLI agents** — Supports Claude Code (default), multi-model (580+ models via OpenRouter, Gemini, OpenAI, Ollama, etc.), OpenAI Codex, GitHub Copilot, and Google Gemini CLI. Switch agents via the `NCLAW_CLI` environment variable.
 - **HTML-formatted replies** — Responses render using Telegram's HTML formatting with plain-text fallback.
+
+## Quickstart
+
+Get NClaw running in under 5 minutes using Docker.
+
+### Step 1: Create a Telegram Bot
+
+1. Open Telegram and search for **@BotFather** (or open [t.me/BotFather](https://t.me/BotFather)).
+2. Send `/newbot`.
+3. Choose a **display name** for your bot (e.g. "My Coding Assistant").
+4. Choose a **username** — must end in `bot` (e.g. `my_coding_assistant_bot`).
+5. BotFather replies with your **bot token** — a string like `123456789:ABCdefGhIjKlMnOpQrStUvWxYz`. Save it.
+
+> **Tip:** You can customize the bot later — send `/mybots` to BotFather to change the name, description, profile picture, and more.
+
+If you want the bot in a **group with topics** (one topic per project), also configure these via BotFather:
+
+6. Send `/mybots` → select your bot → **Bot Settings** → **Group Privacy** → **Turn off**. This lets the bot read all messages in group chats, not just commands.
+7. Send `/setjoingroups` → select your bot → **Enable**. This allows adding the bot to groups.
+
+### Step 2: Find Your Chat ID
+
+NClaw uses `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` to restrict which chats the bot responds in. This setting is optional, but **strongly recommended** — without it, anyone who discovers your bot can send it commands with full access to the container's file system, shell, and network. You need the numeric chat ID.
+
+**For a private chat (1-on-1 with the bot):**
+
+1. Message your bot (send anything — it won't reply yet).
+2. Open this URL in a browser, replacing `<TOKEN>` with your bot token:
+   ```
+   https://api.telegram.org/bot<TOKEN>/getUpdates
+   ```
+3. Find `"chat":{"id":123456789}` in the JSON response. That number is your chat ID.
+
+**For a group chat:**
+
+1. Add the bot to the group.
+2. Send a message in the group.
+3. Use the same `getUpdates` URL above. The group chat ID is a **negative number** (e.g. `-1001234567890`).
+
+> **Tip:** You can whitelist multiple chat IDs by separating them with commas: `123456789,-1001234567890`.
+
+### Step 3: Run NClaw
+
+The fastest way to get started is with the **multi-model** image using a free Gemini API key:
+
+1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey).
+
+2. Run:
+   ```bash
+   docker run -d --name nclaw \
+     -e NCLAW_TELEGRAM_BOT_TOKEN=your-bot-token \
+     -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+     -e NCLAW_DATA_DIR=/app/data \
+     -e NCLAW_MODEL=g@gemini-2.5-pro \
+     -e GEMINI_API_KEY=your-gemini-key \
+     -v ./data:/app/data \
+     ghcr.io/nickalie/nclaw:multi-model
+   ```
+
+3. Message your bot in Telegram — it should reply.
+
+To use **Claude Code** instead (requires an Anthropic account with Claude Code access):
+
+1. Install Claude Code and authenticate:
+   ```bash
+   curl -fsSL https://claude.ai/install.sh | bash
+   claude login
+   ```
+
+2. Run:
+   ```bash
+   docker run -d --name nclaw \
+     -e NCLAW_TELEGRAM_BOT_TOKEN=your-bot-token \
+     -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
+     -e NCLAW_DATA_DIR=/app/data \
+     -v ./data:/app/data \
+     -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
+     ghcr.io/nickalie/nclaw:claude
+   ```
+
+See [Docker](#docker) for all image variants and [Configuration](#configuration) for the full list of options.
 
 ## Docker
 
