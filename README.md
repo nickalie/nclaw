@@ -72,7 +72,14 @@ NClaw provides six Docker images, all based on `node:24-alpine` with shared tool
 | **Copilot** | `copilot` | GitHub Copilot | Medium |
 | **Gemini** | `gemini` | Google Gemini CLI | Medium |
 
-All images are published to `ghcr.io/nickalie/nclaw`. The assistant can install additional packages at runtime (e.g. `apk add ffmpeg`, `pip install pandas`, `npm install -g typescript`).
+All images are published to `ghcr.io/nickalie/nclaw` and built for **linux/amd64** and **linux/arm64**. Docker automatically pulls the correct architecture — no extra flags needed. This means you can run NClaw on:
+
+- **Raspberry Pi** (4/5 or any arm64 board) — a dedicated AI coding assistant on a $35 device
+- **AWS Graviton** instances — lower cost and better price-performance than x86
+- **Apple Silicon** Macs — native arm64 without Rosetta emulation
+- **Oracle Cloud Ampere** or any other arm64 cloud VM
+
+The assistant can install additional packages at runtime (e.g. `apk add ffmpeg`, `pip install pandas`, `npm install -g typescript`).
 
 ### Claude (default)
 
@@ -273,7 +280,7 @@ Set `OLLAMA_BASE_URL`, `LMSTUDIO_BASE_URL`, `VLLM_BASE_URL`, or `MLX_BASE_URL` t
 
 ## Kubernetes (Helm)
 
-The Helm chart is published as an OCI artifact to GHCR.
+The Helm chart is published as an OCI artifact to GHCR. Since all Docker images are multi-arch (amd64/arm64), the chart works on mixed-architecture clusters — including AWS Graviton node pools, Raspberry Pi k3s clusters, and Apple Silicon dev machines.
 
 ```bash
 helm install nclaw oci://ghcr.io/nickalie/charts/nclaw \
