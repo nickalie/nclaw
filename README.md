@@ -152,12 +152,12 @@ docker run -d --name nclaw \
   -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
   -e NCLAW_DATA_DIR=/app/data \
   -e NCLAW_CLI=gemini \
-  -e GEMINI_API_KEY=your-gemini-key \
   -v ./data:/app/data \
+  -v ~/.gemini/oauth_creds.json:/root/.gemini/oauth_creds.json:ro \
   ghcr.io/nickalie/nclaw:gemini
 ```
 
-Gemini CLI authenticates via the `GEMINI_API_KEY` environment variable or Google account login. To obtain an API key, visit the [Google AI Studio](https://aistudio.google.com/apikey).
+Gemini CLI uses Google account OAuth authentication. Mount your credentials file from `~/.gemini/oauth_creds.json`. To obtain credentials, install Gemini CLI locally (`npm install -g @google/gemini-cli`) and sign in on first run.
 
 ### All-in-one
 
@@ -297,9 +297,9 @@ kubectl create secret generic my-codex-secret \
 kubectl create secret generic my-copilot-secret \
   --from-file=config.json=$HOME/.copilot/config.json
 
-# Gemini (API key — inject via claudishApiKeysSecret)
+# Gemini
 kubectl create secret generic my-gemini-secret \
-  --from-literal=GEMINI_API_KEY=your-gemini-key
+  --from-file=oauth_creds.json=$HOME/.gemini/oauth_creds.json
 ```
 
 ### Helm values
@@ -318,6 +318,7 @@ kubectl create secret generic my-gemini-secret \
 | `claudeCredentialsSecret` | `""` | Secret with Claude credentials (key: `credentials.json`) |
 | `codexCredentialsSecret` | `""` | Secret with Codex credentials (key: `auth.json`) |
 | `copilotCredentialsSecret` | `""` | Secret with Copilot credentials (key: `config.json`) |
+| `geminiCredentialsSecret` | `""` | Secret with Gemini credentials (key: `oauth_creds.json`) |
 | `persistence.enabled` | `true` | Enable persistent storage |
 | `persistence.size` | `1Gi` | PVC size |
 | `persistence.storageClass` | `""` | Storage class |

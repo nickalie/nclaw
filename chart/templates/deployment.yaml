@@ -137,6 +137,12 @@ spec:
               subPath: config.json
               readOnly: true
             {{- end }}
+            {{- if .Values.geminiCredentialsSecret }}
+            - name: gemini-credentials
+              mountPath: /root/.gemini/oauth_creds.json
+              subPath: oauth_creds.json
+              readOnly: true
+            {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
@@ -168,4 +174,12 @@ spec:
             items:
               - key: config.json
                 path: config.json
+        {{- end }}
+        {{- if .Values.geminiCredentialsSecret }}
+        - name: gemini-credentials
+          secret:
+            secretName: {{ .Values.geminiCredentialsSecret }}
+            items:
+              - key: oauth_creds.json
+                path: oauth_creds.json
         {{- end }}

@@ -72,6 +72,10 @@ codexCredentialsSecret: ""
 # Provide via secret — the key must be "config.json"
 copilotCredentialsSecret: ""
 
+# Gemini credentials to mount into /root/.gemini/oauth_creds.json
+# Provide via secret — the key must be "oauth_creds.json"
+geminiCredentialsSecret: ""
+
 # Claudish API keys secret — keys are injected as env vars via envFrom.
 # Use the provider's native env var name as the key (e.g. OPENROUTER_API_KEY, GEMINI_API_KEY).
 claudishApiKeysSecret: ""
