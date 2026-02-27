@@ -98,7 +98,8 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=main-{{date 'YYYYMMDDHHmmss'}}-{{sha}}${{ matrix.variant.suffix }},enable={{is_default_branch}}
-            type=raw,value=latest${{ matrix.variant.suffix }}
+            type=raw,value=${{ matrix.variant.target }},enable=${{ matrix.variant.target != 'all' }}
+            type=raw,value=latest,enable=${{ matrix.variant.target == 'all' }}
             type=semver,pattern={{version}}${{ matrix.variant.suffix }}
             type=semver,pattern={{major}}.{{minor}}${{ matrix.variant.suffix }}
 
