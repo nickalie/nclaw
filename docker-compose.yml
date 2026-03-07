@@ -11,4 +11,4 @@ services:
       HTTPS_PROXY: ${HTTP_PROXY}
     volumes:
       - ./data:/app/data
-      - ${CLAUDE_CREDENTIALS_PATH}:/root/.claude/.credentials.json:ro
+      - ${CLAUDE_CREDENTIALS_PATH}:/root/.claude/.credentials.json
