@@ -138,7 +138,7 @@ To use **Claude Code** instead (requires an Anthropic account with Claude Code a
      -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
      -e NCLAW_DATA_DIR=/app/data \
      -v ./data:/app/data \
-     -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
+     -v ~/.claude/.credentials.json:/root/.claude/.credentials.json \
      ghcr.io/nickalie/nclaw:claude
    ```
 
@@ -174,7 +174,7 @@ docker run -d --name nclaw \
   -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
   -e NCLAW_DATA_DIR=/app/data \
   -v ./data:/app/data \
-  -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
+  -v ~/.claude/.credentials.json:/root/.claude/.credentials.json \
   ghcr.io/nickalie/nclaw:claude
 ```
 
@@ -259,7 +259,7 @@ docker run -d --name nclaw \
   -e NCLAW_TELEGRAM_WHITELIST_CHAT_IDS=your-chat-id \
   -e NCLAW_DATA_DIR=/app/data \
   -v ./data:/app/data \
-  -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
+  -v ~/.claude/.credentials.json:/root/.claude/.credentials.json \
   ghcr.io/nickalie/nclaw:latest
 ```
 
@@ -278,7 +278,7 @@ docker run -d --name nclaw \
   -e NCLAW_WEBHOOK_PORT=:3000 \
   -p 3000:3000 \
   -v ./data:/app/data \
-  -v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro \
+  -v ~/.claude/.credentials.json:/root/.claude/.credentials.json \
   ghcr.io/nickalie/nclaw:latest
 ```
 
@@ -597,6 +597,8 @@ Six skills ship with nclaw:
 | `agent-browser` | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) | Browse the web using system Chromium |
 
 The assistant can also create its own skills on the fly when a task requires specialized or repeatable behavior that isn't covered by the built-in set. It can even [learn to produce music](https://nclaw.io/music/).
+
+> **Tip:** When using `docker compose`, user-created skills are automatically persisted in `./claude-skills` and `./agents` on the host, so they survive image updates. Override the paths with `CLAUDE_SKILLS_PATH` and `AGENTS_PATH` in your `.env`.
 
 ## GitOps Deployment
 
