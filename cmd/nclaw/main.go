@@ -178,6 +178,10 @@ func newProvider(backend string) (cli.Provider, error) {
 }
 
 func sendStartupNotifications(b *bot.Bot) {
+	if !config.StartupNotification() {
+		return
+	}
+
 	chatIDs := config.WhitelistChatIDs()
 	if len(chatIDs) == 0 {
 		return

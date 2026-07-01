@@ -68,6 +68,13 @@ func WhitelistChatIDs() []int64 {
 	return ids
 }
 
+// StartupNotification reports whether the bot should send a startup
+// notification message to whitelisted chats (env: NCLAW_STARTUP_NOTIFICATION).
+// Disabled by default.
+func StartupNotification() bool {
+	return viper.GetBool("startup_notification")
+}
+
 // DataDir returns the configured data directory path.
 func DataDir() string {
 	return viper.GetString("data_dir")

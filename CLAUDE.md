@@ -84,6 +84,7 @@ Optional:
 - `NCLAW_MODEL_HAIKU` - Claudish Haiku-tier model override
 - `NCLAW_MODEL_SUBAGENT` - Claudish subagent model override
 - `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` - Comma-separated list of allowed Telegram chat IDs (if unset, bot accepts all chats with a security warning)
+- `NCLAW_STARTUP_NOTIFICATION` - Send a "bot started" notification to whitelisted chats on startup (default: `false`)
 - `NCLAW_DB_PATH` - SQLite path (default: `{data_dir}/nclaw.db`)
 - `NCLAW_TIMEZONE` - Timezone for scheduler (default: system local)
 - `NCLAW_WEBHOOK_BASE_DOMAIN` - Base domain for webhook URLs (required when webhooks enabled)

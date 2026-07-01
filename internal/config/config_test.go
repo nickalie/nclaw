@@ -87,6 +87,19 @@ func TestWhitelistChatIDs_Single(t *testing.T) {
 	assert.Equal(t, []int64{42}, ids)
 }
 
+func TestStartupNotification_Default(t *testing.T) {
+	viper.Reset()
+
+	assert.False(t, StartupNotification())
+}
+
+func TestStartupNotification_Enabled(t *testing.T) {
+	viper.Set("startup_notification", true)
+	defer viper.Reset()
+
+	assert.True(t, StartupNotification())
+}
+
 func TestWebhookBaseDomain(t *testing.T) {
 	// Value should be a bare domain (no protocol) since WebhookURL prepends "https://".
 	viper.Set("webhook.base_domain", "example.com")
