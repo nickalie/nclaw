@@ -119,6 +119,11 @@ func ValidCLIBackends() []string {
 	return []string{"claude", "claudish", "codex", "copilot", "gemini"}
 }
 
+// ClaudeExecPath returns the configured full path to the Claude CLI binary (env: NCLAW_CLAUDE_EXEC_PATH).
+func ClaudeExecPath() string {
+	return viper.GetString("claude_exec_path")
+}
+
 // Model returns the configured model name (env: NCLAW_MODEL).
 func Model() string {
 	return viper.GetString("model")

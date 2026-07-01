@@ -405,6 +405,7 @@ kubectl create secret generic my-gemini-secret \
 | `env.whitelistChatIds` | `""` | Comma-separated allowed chat IDs |
 | `env.webhookBaseDomain` | `""` | Base domain for webhook URLs |
 | `env.cli` | `""` | CLI agent: `claude`, `claudish` (multi-model), `codex`, `copilot`, or `gemini` (empty = image default) |
+| `env.claudeExecPath` | `""` | Full path to the Claude CLI binary (empty = use `claude` from `PATH`) |
 | `env.model` | `""` | Model for multi-model backend (e.g. `g@gemini-2.5-pro`). Setting this auto-selects multi-model |
 | `existingSecret` | `""` | Use existing secret for bot token (key: `telegram-bot-token`) |
 | `claudeCredentialsSecret` | `""` | Secret with Claude credentials (key: `credentials.json`) |
@@ -524,6 +525,7 @@ NClaw variables use the `NCLAW_` prefix. Provider API keys use the provider's na
 | `NCLAW_TELEGRAM_BOT_TOKEN` | Yes | — | Telegram bot token from [@BotFather](https://t.me/BotFather) |
 | `NCLAW_DATA_DIR` | Yes | — | Base directory for session data and files |
 | `NCLAW_CLI` | No | `claude` | CLI agent: `claude`, `claudish` (multi-model), `codex`, `copilot`, or `gemini`. Auto-selects `claudish` when `NCLAW_MODEL` is set |
+| `NCLAW_CLAUDE_EXEC_PATH` | No | `claude` | Full path to the Claude CLI binary |
 | `NCLAW_MODEL` | No | — | Model for multi-model backend (e.g. `g@gemini-2.5-pro`). Setting this auto-selects multi-model |
 | `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | No | — | Comma-separated list of allowed Telegram chat IDs. If unset, accepts all chats (with a security warning) |
 | `NCLAW_DB_PATH` | No | `{data_dir}/nclaw.db` | Path to the SQLite database |
@@ -543,6 +545,7 @@ telegram:
   whitelist_chat_ids: "123456789,987654321"
 
 cli: "claude"  # Options: claude, claudish, codex, copilot, gemini
+claude_exec_path: ""       # e.g. "/opt/claude/bin/claude" (empty = use PATH)
 data_dir: "/app/data"
 db_path: "/app/data/nclaw.db"
 timezone: "Europe/Berlin"

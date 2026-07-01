@@ -73,6 +73,23 @@ ENTRYPOINT ["nclaw"]
 # ---------- claude ----------
 FROM base AS claude
 RUN curl -fsSL https://claude.ai/install.sh | bash
+RUN set -eux; \
+    arch="$(apk --print-arch)"; \
+    case "$arch" in \
+        x86_64) asset_arch='x86_64|amd64' ;; \
+        aarch64) asset_arch='arm64|aarch64' ;; \
+        *) echo "unsupported fya architecture: $arch" >&2; exit 1 ;; \
+    esac; \
+    url="$(curl -fsSL https://api.github.com/repos/umputun/fya/releases/latest \
+        | grep -Eo '"browser_download_url": *"[^"]+"' \
+        | cut -d '"' -f 4 \
+        | grep -E "Linux_(${asset_arch}).*\\.tar\\.gz$" \
+        | head -n 1)"; \
+    test -n "$url"; \
+    curl -fsSL "$url" -o /tmp/fya.tar.gz; \
+    tar -xzf /tmp/fya.tar.gz -C /usr/local/bin fya; \
+    chmod +x /usr/local/bin/fya; \
+    rm /tmp/fya.tar.gz
 RUN cp -r /opt/nclaw-skills/* /root/.claude/skills/
 RUN echo '{"autoCompact": true}' > /root/.claude/settings.json
 

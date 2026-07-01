@@ -161,7 +161,7 @@ func printVersion() error {
 func newProvider(backend string) (cli.Provider, error) {
 	switch backend {
 	case "claude":
-		return claude.NewProvider(), nil
+		return claude.NewProvider(config.ClaudeExecPath()), nil
 	case "claudish":
 		return claudish.NewProvider(
 			config.Model(), config.ModelOpus(), config.ModelSonnet(), config.ModelHaiku(), config.ModelSubagent(),

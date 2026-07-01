@@ -22,6 +22,8 @@ env:
   webhookBaseDomain: ""
   # CLI backend: claude, claudish, codex, copilot, or gemini (empty = image default)
   cli: ""
+  # Full path to the Claude CLI binary (empty = use "claude" from PATH)
+  claudeExecPath: ""
   # Model for claudish (e.g. g@gemini-2.5-pro). Setting this auto-selects claudish
   model: ""
   # Claudish model tier overrides

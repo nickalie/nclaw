@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNew(t *testing.T) {
@@ -42,6 +43,7 @@ func TestBuilderChaining(t *testing.T) {
 	assert.Same(t, c, c.Timeout(30*time.Second))
 	assert.Same(t, c, c.StdIn(strings.NewReader("input")))
 	assert.Same(t, c, c.Env([]string{"FOO=bar"}))
+	assert.Same(t, c, c.ExecPath("/opt/claude/bin/claude"))
 }
 
 func TestBuilderFieldValues(t *testing.T) {
@@ -168,6 +170,25 @@ func TestProvider_NewClient(t *testing.T) {
 	c, ok := client.(*Claude)
 	assert.True(t, ok)
 	assert.NotNil(t, c.bin)
+}
+
+func TestProvider_NewClientWithExecPath(t *testing.T) {
+	p := NewProvider("/opt/claude/bin/claude")
+	client := p.NewClient()
+	c, ok := client.(*Claude)
+	assert.True(t, ok)
+	assert.Equal(t, "/opt/claude/bin/claude", c.bin.Path())
+}
+
+func TestProvider_VersionWithExecPath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "claude-test")
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\necho custom-claude 1.2.3\n"), 0o755))
+
+	p := NewProvider(path)
+	v, err := p.Version()
+	assert.NoError(t, err)
+	assert.Equal(t, "custom-claude 1.2.3", v)
 }
 
 func TestProvider_PreInvoke(t *testing.T) {

@@ -77,6 +77,7 @@ Required env vars (prefix `NCLAW_`):
 
 Optional:
 - `NCLAW_CLI` - CLI backend to use: `claude` (default), `claudish` (multi-model), `codex`, `copilot`, or `gemini`. Auto-selects `claudish` when `NCLAW_MODEL` is set
+- `NCLAW_CLAUDE_EXEC_PATH` - Full path to the Claude CLI binary (default: `claude` from `PATH`)
 - `NCLAW_MODEL` - Model for multi-model backend (e.g. `g@gemini-2.5-pro`, `oai@gpt-4o`)
 - `NCLAW_MODEL_OPUS` - Claudish Opus-tier model override
 - `NCLAW_MODEL_SONNET` - Claudish Sonnet-tier model override

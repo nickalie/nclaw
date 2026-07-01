@@ -82,6 +82,10 @@ spec:
             - name: NCLAW_CLI
               value: {{ .Values.env.cli | quote }}
             {{- end }}
+            {{- if .Values.env.claudeExecPath }}
+            - name: NCLAW_CLAUDE_EXEC_PATH
+              value: {{ .Values.env.claudeExecPath | quote }}
+            {{- end }}
             {{- if .Values.env.model }}
             - name: NCLAW_MODEL
               value: {{ .Values.env.model | quote }}

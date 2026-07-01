@@ -162,6 +162,13 @@ func TestValidCLIBackends(t *testing.T) {
 	assert.Equal(t, []string{"claude", "claudish", "codex", "copilot", "gemini"}, backends)
 }
 
+func TestClaudeExecPath(t *testing.T) {
+	viper.Set("claude_exec_path", "/opt/claude/bin/claude")
+	defer viper.Reset()
+
+	assert.Equal(t, "/opt/claude/bin/claude", ClaudeExecPath())
+}
+
 func TestModel(t *testing.T) {
 	viper.Set("model", "gpt-4o")
 	defer viper.Reset()

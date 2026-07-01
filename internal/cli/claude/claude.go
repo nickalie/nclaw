@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -53,6 +54,16 @@ func New() *Claude {
 		AutoExe()
 
 	return &Claude{bin: bin}
+}
+
+// ExecPath sets the full path to the claude binary.
+func (c *Claude) ExecPath(path string) *Claude {
+	if path == "" {
+		return c
+	}
+
+	c.bin.Dest(filepath.Dir(path)).ExecPath(filepath.Base(path))
+	return c
 }
 
 // BinPath sets the directory containing the claude binary.
