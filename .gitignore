@@ -32,3 +32,7 @@ data
 
 # ralphex progress logs
 .ralphex/progress/
+
+# Python bytecode cache (skill scripts)
+__pycache__/
+*.pyc
