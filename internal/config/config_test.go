@@ -100,6 +100,19 @@ func TestStartupNotification_Enabled(t *testing.T) {
 	assert.True(t, StartupNotification())
 }
 
+func TestStreamMessages_Default(t *testing.T) {
+	viper.Reset()
+
+	assert.False(t, StreamMessages())
+}
+
+func TestStreamMessages_Enabled(t *testing.T) {
+	viper.Set("stream_messages", true)
+	defer viper.Reset()
+
+	assert.True(t, StreamMessages())
+}
+
 func TestWebhookBaseDomain(t *testing.T) {
 	// Value should be a bare domain (no protocol) since WebhookURL prepends "https://".
 	viper.Set("webhook.base_domain", "example.com")

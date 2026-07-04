@@ -6,6 +6,9 @@ linters:
   enable:
     - copyloopvar
     - dupl
+    - errcheck
+    - errname
+    - errorlint
     - gocritic
     - gocyclo
     - govet
@@ -13,14 +16,21 @@ linters:
     - lll
     - misspell
     - nakedret
+    - nolintlint
     - prealloc
     - revive
     - staticcheck
     - unconvert
+    - unparam
     - unused
   settings:
     dupl:
       threshold: 200
+    errcheck:
+      check-blank: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
     gocritic:
       disabled-checks:
         - octalLiteral
@@ -43,6 +53,7 @@ linters:
     generated: lax
     rules:
       - linters:
+          - errcheck
           - gocritic
           - gocyclo
           - lll

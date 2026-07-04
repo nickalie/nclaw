@@ -3,6 +3,7 @@ package claude
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -478,4 +479,51 @@ func TestPrepare_ResetsClearsOldArgs(t *testing.T) {
 	assert.NotContains(t, firstArgs, "-c")
 	assert.Contains(t, secondArgs, "-c")
 	assert.Contains(t, secondArgs, "-p")
+}
+
+// writeFakeClaude writes an executable shell script that emits the given stdout
+// verbatim, returning its path. Skips the test on Windows.
+func writeFakeClaude(t *testing.T, stdout string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake shell-script binary not supported on Windows")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "claude")
+	script := "#!/bin/sh\ncat <<'CLAUDE_EOF'\n" + stdout + "\nCLAUDE_EOF\n"
+	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
+	return path
+}
+
+func TestOnMessage_StreamsLive(t *testing.T) {
+	stdout := `{"type":"system","subtype":"init"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"thinking"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"done"}]}}
+{"type":"result","result":"done"}`
+
+	path := writeFakeClaude(t, stdout)
+
+	var got []string
+	c := New().ExecPath(path)
+	c.OnMessage(func(m string) { got = append(got, m) })
+
+	result, err := c.Ask("hello")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"thinking", "done"}, got)
+	assert.Equal(t, "done", result.Text)
+	assert.Equal(t, "thinking\ndone", result.FullText)
+	assert.Equal(t, []string{"thinking", "done"}, result.Messages)
+}
+
+func TestOnMessage_NotSet_NoStreaming(t *testing.T) {
+	stdout := `{"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}
+{"type":"result","result":"hi"}`
+
+	path := writeFakeClaude(t, stdout)
+
+	c := New().ExecPath(path)
+	result, err := c.Ask("hello")
+	require.NoError(t, err)
+	assert.Equal(t, "hi", result.Text)
 }

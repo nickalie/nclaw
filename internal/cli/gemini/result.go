@@ -34,7 +34,7 @@ func parseStreamJSONOutput(output []byte) *cli.Result {
 	fullText := strings.Join(messages, "\n")
 	lastMessage := messages[len(messages)-1]
 
-	return &cli.Result{Text: lastMessage, FullText: fullText}
+	return &cli.Result{Text: lastMessage, FullText: fullText, Messages: messages}
 }
 
 // collectAssistantMessages scans NDJSON lines and groups consecutive assistant

@@ -78,7 +78,7 @@ func (c *Copilot) runAndParse(query string) (*cli.Result, error) {
 	}
 
 	text := strings.TrimSpace(string(c.bin.StdOut()))
-	return &cli.Result{Text: text, FullText: text}, nil
+	return &cli.Result{Text: text, FullText: text, Messages: []string{text}}, nil
 }
 
 // Version returns the Copilot CLI version string.

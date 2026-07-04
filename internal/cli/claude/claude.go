@@ -13,8 +13,11 @@ import (
 	"github.com/nickalie/nclaw/internal/cli/streamjson"
 )
 
-// Compile-time check: *Claude implements cli.Client.
-var _ cli.Client = (*Claude)(nil)
+// Compile-time checks: *Claude implements cli.Client and cli.StreamingClient.
+var (
+	_ cli.Client          = (*Claude)(nil)
+	_ cli.StreamingClient = (*Claude)(nil)
+)
 
 // outputFormat represents the output format for the CLI.
 type outputFormat string
@@ -42,6 +45,7 @@ type Claude struct {
 	addDirs         []string
 	env             []string
 	stdIn           io.Reader
+	onMessage       cli.MessageHandler
 	skipPermissions bool
 	noPersistence   bool
 	verbose         bool
@@ -163,6 +167,13 @@ func (c *Claude) SkipPermissions() cli.Client {
 	return c
 }
 
+// OnMessage registers a callback invoked for each assistant message as it
+// streams from the CLI, enabling real-time delivery. Implements cli.StreamingClient.
+func (c *Claude) OnMessage(handler cli.MessageHandler) cli.Client {
+	c.onMessage = handler
+	return c
+}
+
 // NoSessionPersistence disables session persistence so sessions are not saved to disk.
 func (c *Claude) NoSessionPersistence() *Claude {
 	c.noPersistence = true
@@ -222,16 +233,40 @@ func (c *Claude) Resume(session, query string) (*cli.Result, error) {
 
 // runAndParse executes the CLI and parses stream-json output into a Result.
 func (c *Claude) runAndParse(query string) (*cli.Result, error) {
-	if err := c.bin.Run(query); err != nil {
-		result := streamjson.ParseOutput(c.bin.StdOut())
+	result, raw, runErr := c.run(query)
+	if runErr != nil {
 		if result.Text == "" && result.FullText == "" {
-			text := strings.TrimSpace(string(c.bin.CombinedOutput()))
+			text := strings.TrimSpace(string(combined(raw, c.bin.StdErr())))
 			result = &cli.Result{Text: text, FullText: text}
 		}
-		return result, fmt.Errorf("claude: %w", err)
+		return result, fmt.Errorf("claude: %w", runErr)
 	}
 
-	return streamjson.ParseOutput(c.bin.StdOut()), nil
+	return result, nil
+}
+
+// run executes the CLI and returns the parsed result plus raw stdout (for error
+// fallback). With an OnMessage handler, stdout is parsed incrementally and each
+// assistant message is delivered live; otherwise output is captured and parsed
+// at the end.
+func (c *Claude) run(query string) (*cli.Result, []byte, error) {
+	if c.onMessage == nil {
+		err := c.bin.Run(query)
+		stdout := c.bin.StdOut()
+		return streamjson.ParseOutput(stdout), stdout, err
+	}
+
+	w := streamjson.NewStreamWriter(c.onMessage)
+	c.bin.SetStdOut(w)
+	err := c.bin.Run(query)
+	return w.Result(), w.Bytes(), err
+}
+
+// combined concatenates stdout and stderr for error fallback output.
+func combined(stdout, stderr []byte) []byte {
+	out := make([]byte, 0, len(stdout)+len(stderr))
+	out = append(out, stdout...)
+	return append(out, stderr...)
 }
 
 // Version returns the Claude CLI version string.

@@ -10,14 +10,18 @@ import (
 	"github.com/nickalie/nclaw/internal/cli/streamjson"
 )
 
-// Compile-time check: *Claudish implements cli.Client.
-var _ cli.Client = (*Claudish)(nil)
+// Compile-time checks: *Claudish implements cli.Client and cli.StreamingClient.
+var (
+	_ cli.Client          = (*Claudish)(nil)
+	_ cli.StreamingClient = (*Claudish)(nil)
+)
 
 // Claudish wraps the claudish CLI binary, which proxies Claude Code to alternative model providers.
 type Claudish struct {
 	bin             *binwrapper.BinWrapper
 	dir             string
 	systemPrompt    string
+	onMessage       cli.MessageHandler
 	skipPermissions bool
 	model           string
 	modelOpus       string
@@ -53,6 +57,13 @@ func (c *Claudish) AppendSystemPrompt(prompt string) cli.Client {
 	return c
 }
 
+// OnMessage registers a callback invoked for each assistant message as it
+// streams from the CLI, enabling real-time delivery. Implements cli.StreamingClient.
+func (c *Claudish) OnMessage(handler cli.MessageHandler) cli.Client {
+	c.onMessage = handler
+	return c
+}
+
 // Ask sends a query in print mode and returns the response.
 func (c *Claudish) Ask(query string) (*cli.Result, error) {
 	c.prepare("-p")
@@ -67,16 +78,33 @@ func (c *Claudish) Continue(query string) (*cli.Result, error) {
 
 // runAndParse executes the CLI and parses stream-json output into a Result.
 func (c *Claudish) runAndParse(query string) (*cli.Result, error) {
-	if err := c.bin.Run(query); err != nil {
-		result := streamjson.ParseOutput(c.bin.StdOut())
+	result, raw, runErr := c.run(query)
+	if runErr != nil {
 		if result.Text == "" && result.FullText == "" {
-			text := c.sanitizeOutput(string(c.bin.CombinedOutput()))
+			text := c.sanitizeOutput(string(raw) + string(c.bin.StdErr()))
 			result = &cli.Result{Text: text, FullText: text}
 		}
-		return result, fmt.Errorf("claudish: %w", err)
+		return result, fmt.Errorf("claudish: %w", runErr)
 	}
 
-	return streamjson.ParseOutput(c.bin.StdOut()), nil
+	return result, nil
+}
+
+// run executes the CLI and returns the parsed result plus raw stdout (for error
+// fallback). With an OnMessage handler, stdout is parsed incrementally and each
+// assistant message is delivered live; otherwise output is captured and parsed
+// at the end.
+func (c *Claudish) run(query string) (*cli.Result, []byte, error) {
+	if c.onMessage == nil {
+		err := c.bin.Run(query)
+		stdout := c.bin.StdOut()
+		return streamjson.ParseOutput(stdout), stdout, err
+	}
+
+	w := streamjson.NewStreamWriter(c.onMessage)
+	c.bin.SetStdOut(w)
+	err := c.bin.Run(query)
+	return w.Result(), w.Bytes(), err
 }
 
 // sanitizeOutput strips lines containing sensitive variable names from error output

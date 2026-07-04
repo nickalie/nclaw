@@ -117,7 +117,7 @@ func isCached(localPath string, att *attachment) bool {
 	}
 
 	if att.fileUniqueID != "" {
-		stored, _ := os.ReadFile(localPath + ".uid")
+		stored, _ := os.ReadFile(localPath + ".uid") //nolint:errcheck // missing sidecar file means cache miss
 		if string(stored) != att.fileUniqueID {
 			return false
 		}
@@ -145,7 +145,7 @@ func fetchToFile(ctx context.Context, url, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response body already read
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status %d", resp.StatusCode)
@@ -157,7 +157,7 @@ func fetchToFile(ctx context.Context, url, dst string) error {
 	}
 
 	if _, err = io.Copy(out, resp.Body); err != nil {
-		out.Close()
+		out.Close() //nolint:errcheck // already returning the copy error
 		return err
 	}
 	return out.Close()

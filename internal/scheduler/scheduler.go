@@ -213,7 +213,7 @@ func (s *Scheduler) removeJob(taskID string) {
 	s.mu.Unlock()
 
 	if ok {
-		_ = s.cron.RemoveJob(jobID)
+		s.cron.RemoveJob(jobID) //nolint:errcheck // job already removed from map; cron cleanup is best-effort
 	}
 }
 
@@ -421,7 +421,7 @@ func (s *Scheduler) sendResult(task *model.ScheduledTask, result *cli.Result, ru
 	defer cancel()
 
 	dir := telegram.ChatDir(s.dataDir, task.ChatID, task.ThreadID)
-	s.pipeline.Process(ctx, result, runErr, task.ChatID, task.ThreadID, dir)
+	s.pipeline.Process(ctx, result, runErr, task.ChatID, task.ThreadID, dir, false)
 }
 
 func (s *Scheduler) getNextRun(jobID uuid.UUID) *time.Time {

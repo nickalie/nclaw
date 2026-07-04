@@ -168,7 +168,7 @@ func (m *Manager) processIncoming(wh *model.WebhookRegistration, req IncomingReq
 	defer cancel()
 
 	dir := telegram.ChatDir(m.dataDir, wh.ChatID, wh.ThreadID)
-	m.pipeline.Process(ctx, result, cliErr, wh.ChatID, wh.ThreadID, dir)
+	m.pipeline.Process(ctx, result, cliErr, wh.ChatID, wh.ThreadID, dir, false)
 }
 
 func (m *Manager) callCLI(wh *model.WebhookRegistration, req IncomingRequest) (*cli.Result, error) {

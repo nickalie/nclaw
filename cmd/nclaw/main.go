@@ -67,7 +67,7 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	defer sched.Shutdown()
+	defer sched.Shutdown() //nolint:errcheck // shutdown error on exit is not actionable
 	defer shutdownWebhook(webhookSrv, webhookMgr)
 
 	log.Printf("nclaw bot started (%s, %s: %s)", version.String(), provider.Name(), cliVer)
@@ -126,7 +126,9 @@ func buildPipeline(
 		executors = append(executors, webhookMgr)
 	}
 	fileSenders.MediaGroup = newSendMediaGroupFunc(b)
-	return pipeline.New(newPipelineSendFunc(b), fileSenders, webhookMgr != nil, executors...)
+	p := pipeline.New(newPipelineSendFunc(b), fileSenders, webhookMgr != nil, executors...)
+	p.SetStreamMessages(config.StreamMessages())
+	return p
 }
 
 func hasFlag(flags ...string) bool {
@@ -142,8 +144,7 @@ func hasFlag(flags ...string) bool {
 
 func printVersion() error {
 	fmt.Printf("nclaw %s\n", version.String())
-	// Best-effort: show CLI version if config is available.
-	_ = config.Init()
+	config.Init() //nolint:errcheck // best-effort: show CLI version if config is available
 	provider, err := newProvider(config.CLI())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cli: %v\n", err)

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -19,7 +20,7 @@ var requiredKeys = []string{
 
 // Init loads configuration from files and environment variables.
 func Init() error {
-	_ = godotenv.Load()
+	godotenv.Load() //nolint:errcheck // .env is optional; absence is not an error
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -30,7 +31,8 @@ func Init() error {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) {
 			return err
 		}
 	}
@@ -73,6 +75,13 @@ func WhitelistChatIDs() []int64 {
 // Disabled by default.
 func StartupNotification() bool {
 	return viper.GetBool("startup_notification")
+}
+
+// StreamMessages reports whether every assistant message from the CLI's JSON
+// stream should be sent as a separate Telegram reply (env: NCLAW_STREAM_MESSAGES).
+// When disabled (default), only the final message is sent.
+func StreamMessages() bool {
+	return viper.GetBool("stream_messages")
 }
 
 // DataDir returns the configured data directory path.

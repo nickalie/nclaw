@@ -65,14 +65,14 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 	log.Printf("handler: received message from chat=%d thread=%d text=%q hasFile=%v", chatID, threadID, text, att != nil)
 
 	unlock := h.ChatLocker.Lock(chatID, threadID)
-	result, cliErr := h.callCLI(dir, prompt, chatID, threadID)
+	result, streamed, cliErr := h.callCLI(ctx, dir, prompt, chatID, threadID)
 	unlock()
 	stopTyping()
 
 	if result == nil {
 		result = &cli.Result{}
 	}
-	h.Pipeline.Process(ctx, result, cliErr, chatID, threadID, dir)
+	h.Pipeline.Process(ctx, result, cliErr, chatID, threadID, dir, streamed)
 }
 
 // resolveContent extracts text and attachment from a message, falling back to reply attachment.
@@ -136,7 +136,9 @@ func buildPrompt(ctx context.Context, b *bot.Bot, text string, att *attachment, 
 	return prompt
 }
 
-func (h *Handler) callCLI(dir, prompt string, chatID int64, threadID int) (*cli.Result, error) {
+func (h *Handler) callCLI(
+	ctx context.Context, dir, prompt string, chatID int64, threadID int,
+) (*cli.Result, bool, error) {
 	taskPrompt := h.Scheduler.FormatTaskList(chatID, threadID)
 	systemPrompt := telegram.Prompt + "\n\n" + taskPrompt
 
@@ -144,8 +146,11 @@ func (h *Handler) callCLI(dir, prompt string, chatID int64, threadID int) (*cli.
 		log.Printf("handler: pre-invoke warning: %v", err)
 	}
 
+	client := h.Provider.NewClient().Dir(dir).SkipPermissions().AppendSystemPrompt(systemPrompt)
+	stream := h.Pipeline.AttachStream(ctx, client, chatID, threadID)
+
 	log.Printf("handler: calling %s Continue in dir=%s", h.Provider.Name(), dir)
-	result, err := h.Provider.NewClient().Dir(dir).SkipPermissions().AppendSystemPrompt(systemPrompt).Continue(prompt)
+	result, err := client.Continue(prompt)
 
 	if err != nil {
 		log.Printf("handler: %s error: %v", h.Provider.Name(), err)
@@ -154,7 +159,7 @@ func (h *Handler) callCLI(dir, prompt string, chatID int64, threadID int) (*cli.
 		}
 	}
 
-	return result, err
+	return result, stream.Streamed(), err
 }
 
 func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {
@@ -165,7 +170,7 @@ func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {
 	}
 
 	for {
-		b.SendChatAction(ctx, params)
+		b.SendChatAction(ctx, params) //nolint:errcheck // typing indicator is best-effort
 
 		select {
 		case <-ctx.Done():

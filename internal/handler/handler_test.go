@@ -683,7 +683,7 @@ func TestCallCLI_Success(t *testing.T) {
 		ChatLocker: telegram.NewChatLocker(),
 	}
 
-	result, err := h.callCLI(t.TempDir(), "hello prompt", 100, 0)
+	result, _, err := h.callCLI(context.Background(), t.TempDir(), "hello prompt", 100, 0)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, "response text", result.Text)
@@ -709,7 +709,7 @@ func TestCallCLI_Error(t *testing.T) {
 		ChatLocker: telegram.NewChatLocker(),
 	}
 
-	result, err := h.callCLI(t.TempDir(), "hello", 100, 0)
+	result, _, err := h.callCLI(context.Background(), t.TempDir(), "hello", 100, 0)
 	assert.Error(t, err)
 	assert.NotNil(t, result)
 	assert.Contains(t, result.Text, "error: cli failed")
@@ -732,7 +732,7 @@ func TestCallCLI_ErrorWithPartialResult(t *testing.T) {
 		ChatLocker: telegram.NewChatLocker(),
 	}
 
-	result, err := h.callCLI(t.TempDir(), "hello", 100, 0)
+	result, _, err := h.callCLI(context.Background(), t.TempDir(), "hello", 100, 0)
 	assert.Error(t, err)
 	assert.NotNil(t, result)
 	// When result has text, it should keep the partial output, not replace with error.
@@ -760,7 +760,7 @@ func TestCallCLI_PreInvokeError(t *testing.T) {
 	}
 
 	// PreInvoke error should be logged as warning but not block the CLI call.
-	result, err := h.callCLI(t.TempDir(), "hello", 100, 0)
+	result, _, err := h.callCLI(context.Background(), t.TempDir(), "hello", 100, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, "ok", result.Text)
 }
@@ -781,7 +781,7 @@ func TestCallCLI_SystemPromptIncludesTaskList(t *testing.T) {
 		ChatLocker: telegram.NewChatLocker(),
 	}
 
-	_, _ = h.callCLI(t.TempDir(), "test", 100, 0)
+	_, _, _ = h.callCLI(context.Background(), t.TempDir(), "test", 100, 0)
 	// System prompt should include both the Telegram formatting prompt and task list.
 	assert.Contains(t, client.systemPrompt, telegram.Prompt)
 	assert.Contains(t, client.systemPrompt, "Current scheduled tasks:")

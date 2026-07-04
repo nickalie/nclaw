@@ -202,7 +202,7 @@ func atomicWriteJSON(path string, data map[string]json.RawMessage) error {
 	if err := os.Rename(tmp, path); err != nil {
 		// Rename fails on Docker bind-mounted files (EBUSY/EXDEV).
 		// Fall back to direct write and clean up the temp file.
-		_ = os.Remove(tmp)
+		os.Remove(tmp) //nolint:errcheck // temp cleanup; falling back to direct write
 		return os.WriteFile(path, content, 0o600)
 	}
 
@@ -234,11 +234,11 @@ func refreshAccessToken(refreshToken string) (*tokenRefreshResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("POST %s: %w", tokenURLVal, err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response body already read
 
 	if resp.StatusCode != http.StatusOK {
 		var errBody json.RawMessage
-		_ = json.NewDecoder(resp.Body).Decode(&errBody)
+		json.NewDecoder(resp.Body).Decode(&errBody) //nolint:errcheck // best-effort decode for error message
 		return nil, fmt.Errorf("token refresh returned %d: %s", resp.StatusCode, errBody)
 	}
 
