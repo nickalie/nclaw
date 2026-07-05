@@ -83,7 +83,7 @@ RUN set -eux; \
     url="$(curl -fsSL https://api.github.com/repos/umputun/fya/releases/latest \
         | grep -Eo '"browser_download_url": *"[^"]+"' \
         | cut -d '"' -f 4 \
-        | grep -E "Linux_(${asset_arch}).*\\.tar\\.gz$" \
+        | grep -Ei "linux_(${asset_arch}).*\\.tar\\.gz$" \
         | head -n 1)"; \
     test -n "$url"; \
     curl -fsSL "$url" -o /tmp/fya.tar.gz; \
