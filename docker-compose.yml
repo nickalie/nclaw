@@ -1,0 +1,16 @@
+services:
+  nclaw:
+    image: ghcr.io/nickalie/nclaw:claude
+    container_name: nclaw
+    restart: unless-stopped
+    environment:
+      NCLAW_TELEGRAM_BOT_TOKEN: ${NCLAW_TELEGRAM_BOT_TOKEN}
+      NCLAW_TELEGRAM_WHITELIST_CHAT_IDS: ${NCLAW_TELEGRAM_WHITELIST_CHAT_IDS}
+      NCLAW_DATA_DIR: /app/data
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTP_PROXY}
+    volumes:
+      - ./data:/app/data
+      - ${CLAUDE_CREDENTIALS_PATH}:/root/.claude/.credentials.json
+      - ${CLAUDE_SKILLS_PATH:-./claude-skills}:/root/.claude/skills
+      - ${AGENTS_PATH:-./agents}:/root/.agents
