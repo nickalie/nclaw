@@ -157,6 +157,8 @@ NClaw provides six Docker images, all based on `node:24-alpine` with shared tool
 | **Copilot** | `copilot` | GitHub Copilot | Medium |
 | **Gemini** | `gemini` | Google Gemini CLI | Medium |
 
+Images that include Claude Code run `claude update` on container start (60s timeout; on failure the bundled version is used), so a restart picks up the latest Claude Code release.
+
 All images are published to `ghcr.io/nickalie/nclaw` and built for **linux/amd64** and **linux/arm64**. Docker automatically pulls the correct architecture — no extra flags needed. This means you can run NClaw on:
 
 - **Raspberry Pi** (4/5 or any arm64 board) — a dedicated AI coding assistant on a $35 device

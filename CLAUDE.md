@@ -193,4 +193,6 @@ A single `docker/Dockerfile` uses multi-stage targets to produce 6 image variant
 - `--target copilot` — GitHub Copilot only (tagged `copilot`)
 - `--target gemini` — Gemini CLI only (tagged `gemini`)
 
+Variants with Claude Code (`claude`, `multi-model`, `all`) use `docker/claude-entrypoint.sh`, which runs `claude update` (60s timeout, non-fatal) before `exec nclaw`, because the native installer's binary lives in `/root/.local` and isn't persisted.
+
 CI builds and pushes all six variants to GHCR using a matrix strategy. Custom nclaw skills (`schedule`, `send-file`, `webhook`) and third-party skills are included in all variants.
