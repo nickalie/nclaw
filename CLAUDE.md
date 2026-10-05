@@ -48,10 +48,10 @@ Three input channels (handler, scheduler, webhook) each invoke the configured CL
 - `internal/config/` - Viper-based config (env prefix `NCLAW_`, `.env` support, optional `config.yaml`)
 - `internal/cli/` - Generic CLI interfaces (`Client`, `Provider`, `Result`) that all backends implement
 - `internal/cli/streamjson/` - Shared stream-json output parser (used by Claude and Claudish adapters)
-- `internal/claude/` - Claude Code CLI adapter (fluent builder, stream-json parsing, OAuth token refresh)
+- `internal/cli/claude/` - Claude Code CLI adapter (fluent builder, stream-json parsing, OAuth token refresh)
 - `internal/cli/claudish/` - Multi-model CLI adapter (via OpenRouter, Gemini, OpenAI, Ollama, etc.)
-- `internal/codex/` - OpenAI Codex CLI adapter (JSONL event parsing, AGENTS.md system prompt)
-- `internal/copilot/` - GitHub Copilot CLI adapter (plain text output, `.github/copilot-instructions.md` system prompt)
+- `internal/cli/codex/` - OpenAI Codex CLI adapter (JSONL event parsing, AGENTS.md system prompt)
+- `internal/cli/copilot/` - GitHub Copilot CLI adapter (plain text output, `.github/copilot-instructions.md` system prompt)
 - `internal/cli/gemini/` - Gemini CLI adapter (NDJSON stream-json parsing, `GEMINI.md` system prompt)
 - `internal/handler/` - Telegram message handling, file attachments, reply context
 - `internal/pipeline/` - Unified post-processing: block execution, stripping, sendfile, reply delivery
@@ -60,6 +60,8 @@ Three input channels (handler, scheduler, webhook) each invoke the configured CL
 - `internal/db/` - Database operations (SQLite with WAL mode)
 - `internal/scheduler/` - Task scheduling via `gocron`, command parsing from CLI replies
 - `internal/webhook/` - GoFiber HTTP server, webhook manager, and command parsing from CLI replies
+- `internal/telegram/` - Shared Telegram helpers: message splitting, chat directory paths, per-chat locking
+- `internal/version/` - Build version string
 - `data/` - Runtime data directory (gitignored)
 
 ## Key Patterns
@@ -68,10 +70,10 @@ Three input channels (handler, scheduler, webhook) each invoke the configured CL
 All CLI backends implement two interfaces: `cli.Client` (per-request builder with `Dir()`, `SkipPermissions()`, `AppendSystemPrompt()`, `Ask()`, `Continue()`) and `cli.Provider` (singleton with `NewClient()`, `PreInvoke()`, `Version()`, `Name()`). The `*cli.Result` struct has `Text` (final message for display) and `FullText` (all messages for command block scanning). Consumers use only these interfaces, making them backend-agnostic.
 
 ### CLI Adapters
-- **Claude** (`internal/claude/`): Stream-json output parsing via shared `streamjson` package. Claude-specific methods (`Model`, `FallbackModel`, `Resume`) remain on the concrete `*Claude` type. `PreInvoke()` handles OAuth token refresh.
+- **Claude** (`internal/cli/claude/`): Stream-json output parsing via shared `streamjson` package. Claude-specific methods (`Model`, `FallbackModel`, `Resume`) remain on the concrete `*Claude` type. `PreInvoke()` handles OAuth token refresh.
 - **Claudish** (`internal/cli/claudish/`): Wraps Claude Code via [claudish](https://github.com/MadAppGang/claudish), proxying API calls to alternative providers (OpenRouter, Gemini, OpenAI, Ollama, LM Studio, etc.). Uses the same stream-json output format as Claude, parsed via the shared `streamjson` package. Passes model config (`--model` flag) and model tier overrides (`CLAUDISH_MODEL_OPUS/SONNET/HAIKU/SUBAGENT`) as environment variables. Provider API keys (e.g. `OPENROUTER_API_KEY`, `GEMINI_API_KEY`) pass through from the OS environment. `PreInvoke()` is a no-op.
-- **Codex** (`internal/codex/`): JSONL event parsing (`item.completed` with `type: "agent_message"`). System prompt written to `AGENTS.md` in the working directory.
-- **Copilot** (`internal/copilot/`): Plain text output via `-s` flag (`Text == FullText`). System prompt written to `.github/copilot-instructions.md`. Known limitation: no structured output, so command blocks in intermediate messages are not captured.
+- **Codex** (`internal/cli/codex/`): JSONL event parsing (`item.completed` with `type: "agent_message"`). System prompt written to `AGENTS.md` in the working directory.
+- **Copilot** (`internal/cli/copilot/`): Plain text output via `-s` flag (`Text == FullText`). System prompt written to `.github/copilot-instructions.md`. Known limitation: no structured output, so command blocks in intermediate messages are not captured.
 - **Gemini** (`internal/cli/gemini/`): NDJSON stream-json output parsing (`--output-format stream-json`) with its own event types (message, tool_use, tool_result, error, result). System prompt written to `GEMINI.md` in the working directory. Uses `--approval-mode yolo` for auto-approve. `PreInvoke()` is a no-op.
 
 ### OAuth Token Refresh
