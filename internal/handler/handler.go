@@ -34,7 +34,7 @@ func (h *Handler) Default(parentCtx context.Context, b *bot.Bot, update *models.
 
 	msg := update.Message
 
-	if !isChatAllowed(msg.Chat.ID) {
+	if !config.IsChatAllowed(msg.Chat.ID) {
 		log.Printf("handler: ignoring message from non-whitelisted chat=%d", msg.Chat.ID)
 		return
 	}
@@ -61,10 +61,9 @@ func (h *Handler) processMessage(ctx context.Context, b *bot.Bot, msg *models.Me
 
 	go sendTyping(typingCtx, b, chatID, threadID)
 
+	unlock := h.ChatLocker.Lock(chatID, threadID)
 	prompt := buildPrompt(ctx, b, text, att, dir)
 	log.Printf("handler: received message from chat=%d thread=%d text=%q hasFile=%v", chatID, threadID, text, att != nil)
-
-	unlock := h.ChatLocker.Lock(chatID, threadID)
 	result, streamed, cliErr := h.callCLI(ctx, dir, prompt, chatID, threadID)
 	unlock()
 	stopTyping()
@@ -151,15 +150,25 @@ func (h *Handler) callCLI(
 
 	log.Printf("handler: calling %s Continue in dir=%s", h.Provider.Name(), dir)
 	result, err := client.Continue(prompt)
-
 	if err != nil {
 		log.Printf("handler: %s error: %v", h.Provider.Name(), err)
-		if result == nil || result.Text == "" {
-			result = &cli.Result{Text: "error: " + err.Error(), FullText: "error: " + err.Error()}
-		}
+		return withErrorNotice(result, stream.Streamed(), err), false, err
 	}
 
-	return result, stream.Streamed(), err
+	return result, stream.Streamed(), nil
+}
+
+// withErrorNotice makes a CLI failure visible to the user even when partial output was produced or already streamed.
+func withErrorNotice(result *cli.Result, streamed bool, err error) *cli.Result {
+	notice := "error: " + err.Error()
+	if result == nil || result.Text == "" || streamed {
+		return &cli.Result{Text: notice, FullText: notice}
+	}
+	withNotice := &cli.Result{Text: result.Text + "\n\n" + notice, FullText: result.FullText}
+	if len(result.Messages) > 0 {
+		withNotice.Messages = append(slices.Clone(result.Messages), notice)
+	}
+	return withNotice
 }
 
 func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {
@@ -178,11 +187,6 @@ func sendTyping(ctx context.Context, b *bot.Bot, chatID int64, threadID int) {
 		case <-time.After(4 * time.Second):
 		}
 	}
-}
-
-func isChatAllowed(chatID int64) bool {
-	ids := config.WhitelistChatIDs()
-	return len(ids) == 0 || slices.Contains(ids, chatID)
 }
 
 func ensureDir(dir string) {

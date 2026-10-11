@@ -2,10 +2,12 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -37,13 +39,16 @@ func extractMedia(msg *models.Message) *attachment {
 		return &attachment{fileID: d.FileID, fileUniqueID: d.FileUniqueID, fileSize: d.FileSize, filename: d.FileName}
 	case len(msg.Photo) > 0:
 		p := msg.Photo[len(msg.Photo)-1]
-		return &attachment{fileID: p.FileID, fileUniqueID: p.FileUniqueID, fileSize: int64(p.FileSize), filename: "photo.jpg"}
+		return &attachment{fileID: p.FileID, fileUniqueID: p.FileUniqueID, fileSize: int64(p.FileSize),
+			filename: generatedName("photo", p.FileUniqueID, ".jpg")}
 	case msg.Audio != nil:
 		a := msg.Audio
-		return &attachment{fileID: a.FileID, fileUniqueID: a.FileUniqueID, fileSize: a.FileSize, filename: nameOr(a.FileName, "audio.ogg")}
+		return &attachment{fileID: a.FileID, fileUniqueID: a.FileUniqueID, fileSize: a.FileSize,
+			filename: nameOr(a.FileName, generatedName("audio", a.FileUniqueID, ".ogg"))}
 	case msg.Voice != nil:
 		v := msg.Voice
-		return &attachment{fileID: v.FileID, fileUniqueID: v.FileUniqueID, fileSize: v.FileSize, filename: "voice.ogg"}
+		return &attachment{fileID: v.FileID, fileUniqueID: v.FileUniqueID, fileSize: v.FileSize,
+			filename: generatedName("voice", v.FileUniqueID, ".ogg")}
 	default:
 		return nil
 	}
@@ -54,22 +59,30 @@ func extractExtra(msg *models.Message) *attachment {
 	case msg.Video != nil:
 		v := msg.Video
 		return &attachment{fileID: v.FileID, fileUniqueID: v.FileUniqueID, fileSize: v.FileSize,
-			filename: nameOr(v.FileName, "video.mp4")}
+			filename: nameOr(v.FileName, generatedName("video", v.FileUniqueID, ".mp4"))}
 	case msg.VideoNote != nil:
 		v := msg.VideoNote
 		return &attachment{fileID: v.FileID, fileUniqueID: v.FileUniqueID, fileSize: int64(v.FileSize),
-			filename: "video_note.mp4"}
+			filename: generatedName("video_note", v.FileUniqueID, ".mp4")}
 	case msg.Animation != nil:
 		a := msg.Animation
 		return &attachment{fileID: a.FileID, fileUniqueID: a.FileUniqueID, fileSize: a.FileSize,
-			filename: nameOr(a.FileName, "animation.mp4")}
+			filename: nameOr(a.FileName, generatedName("animation", a.FileUniqueID, ".mp4"))}
 	case msg.Sticker != nil:
 		s := msg.Sticker
 		return &attachment{fileID: s.FileID, fileUniqueID: s.FileUniqueID, fileSize: int64(s.FileSize),
-			filename: "sticker.webp"}
+			filename: generatedName("sticker", s.FileUniqueID, ".webp")}
 	default:
 		return nil
 	}
+}
+
+// generatedName names a file Telegram sends without one, keyed by its unique ID so different files never overwrite each other.
+func generatedName(base, uniqueID, ext string) string {
+	if uniqueID == "" {
+		return base + ext
+	}
+	return base + "_" + uniqueID + ext
 }
 
 func nameOr(name, fallback string) string {
@@ -93,10 +106,9 @@ func downloadAttachment(ctx context.Context, b *bot.Bot, att *attachment, dir st
 		return "", fmt.Errorf("get file: %w", err)
 	}
 
-	link := b.FileDownloadLink(f)
-	log.Printf("handler: downloading file %s from %s", att.filename, link)
+	log.Printf("handler: downloading file %s (%s)", att.filename, f.FilePath)
 
-	if err := fetchToFile(ctx, link, localPath); err != nil {
+	if err := fetchToFile(ctx, b.FileDownloadLink(f), localPath); err != nil {
 		return "", fmt.Errorf("download %s: %w", att.filename, err)
 	}
 
@@ -135,14 +147,19 @@ func writeUID(localPath, uid string) {
 	}
 }
 
-func fetchToFile(ctx context.Context, url, dst string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+func fetchToFile(ctx context.Context, link, dst string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, http.NoBody)
 	if err != nil {
-		return err
+		return errors.New("invalid download link")
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			// The link embeds the bot token, and this error reaches logs and the CLI prompt.
+			return fmt.Errorf("%s: %w", urlErr.Op, urlErr.Err)
+		}
 		return err
 	}
 	defer resp.Body.Close() //nolint:errcheck // response body already read

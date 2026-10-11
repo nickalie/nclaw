@@ -203,23 +203,6 @@ func TestNameOr(t *testing.T) {
 	assert.Equal(t, "fallback.ogg", nameOr("", "fallback.ogg"))
 }
 
-func TestIsChatAllowed(t *testing.T) {
-	viper.Set("telegram.whitelist_chat_ids", "100,200,300")
-	defer viper.Reset()
-
-	assert.True(t, isChatAllowed(100))
-	assert.True(t, isChatAllowed(200))
-	assert.True(t, isChatAllowed(300))
-	assert.False(t, isChatAllowed(999))
-}
-
-func TestIsChatAllowed_NoWhitelist(t *testing.T) {
-	viper.Reset()
-
-	assert.True(t, isChatAllowed(100))
-	assert.True(t, isChatAllowed(999))
-}
-
 func TestChatDir_NoThread(t *testing.T) {
 	viper.Set("data_dir", "/data")
 	defer viper.Reset()
@@ -263,7 +246,7 @@ func TestMessageContent_ForwardedPhotoNoCaption(t *testing.T) {
 	assert.Empty(t, text)
 	assert.NotNil(t, att)
 	assert.Equal(t, "large", att.fileID)
-	assert.Equal(t, "photo.jpg", att.filename)
+	assert.Equal(t, "photo_ul.jpg", att.filename)
 }
 
 func TestMessageContent_ForwardedVoice(t *testing.T) {
@@ -275,7 +258,7 @@ func TestMessageContent_ForwardedVoice(t *testing.T) {
 	assert.Empty(t, text)
 	assert.NotNil(t, att)
 	assert.Equal(t, "voice1", att.fileID)
-	assert.Equal(t, "voice.ogg", att.filename)
+	assert.Equal(t, "voice_vu1.ogg", att.filename)
 }
 
 func TestMessageContent_ForwardedTextOnly(t *testing.T) {
@@ -322,7 +305,7 @@ func TestMessageContent_ForwardedSticker(t *testing.T) {
 	assert.Empty(t, text)
 	assert.NotNil(t, att)
 	assert.Equal(t, "st1", att.fileID)
-	assert.Equal(t, "sticker.webp", att.filename)
+	assert.Equal(t, "sticker_su1.webp", att.filename)
 }
 
 func TestResolveContent_ForwardedDocumentWithCaption(t *testing.T) {
@@ -735,8 +718,54 @@ func TestCallCLI_ErrorWithPartialResult(t *testing.T) {
 	result, _, err := h.callCLI(context.Background(), t.TempDir(), "hello", 100, 0)
 	assert.Error(t, err)
 	assert.NotNil(t, result)
-	// When result has text, it should keep the partial output, not replace with error.
-	assert.Equal(t, "partial output", result.Text)
+	assert.Equal(t, "partial output\n\nerror: timeout", result.Text)
+}
+
+func TestCallCLI_ErrorWithPartialMessages(t *testing.T) {
+	client := &mockClient{
+		contResult: &cli.Result{Text: "second", FullText: "first\nsecond", Messages: []string{"first", "second"}},
+		contErr:    fmt.Errorf("crashed"),
+	}
+	h := &Handler{
+		Provider:   &mockProvider{client: client},
+		Scheduler:  setupTestScheduler(t),
+		ChatLocker: telegram.NewChatLocker(),
+	}
+
+	result, streamed, err := h.callCLI(context.Background(), t.TempDir(), "hello", 100, 0)
+	assert.Error(t, err)
+	assert.False(t, streamed)
+	assert.Equal(t, []string{"first", "second", "error: crashed"}, result.Messages)
+}
+
+func TestWithErrorNotice(t *testing.T) {
+	err := fmt.Errorf("boom")
+	partial := &cli.Result{Text: "partial", FullText: "partial", Messages: []string{"partial"}}
+
+	tests := []struct {
+		name     string
+		result   *cli.Result
+		streamed bool
+		wantText string
+	}{
+		{"nil result", nil, false, "error: boom"},
+		{"empty text", &cli.Result{}, false, "error: boom"},
+		{"partial text", partial, false, "partial\n\nerror: boom"},
+		{"already streamed sends only the notice", partial, true, "error: boom"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.wantText, withErrorNotice(tt.result, tt.streamed, err).Text)
+		})
+	}
+	assert.Equal(t, []string{"partial"}, partial.Messages, "input messages must not be mutated")
+}
+
+func TestWithErrorNotice_NoMessagesKeepsTextFallback(t *testing.T) {
+	result := withErrorNotice(&cli.Result{Text: "diagnostic", FullText: "diagnostic"}, false, fmt.Errorf("exit status 1"))
+
+	assert.Empty(t, result.Messages, "empty Messages lets displayTexts fall back to Text")
+	assert.Equal(t, "diagnostic\n\nerror: exit status 1", result.Text)
 }
 
 func TestCallCLI_PreInvokeError(t *testing.T) {
@@ -973,4 +1002,20 @@ func TestSendTyping_StopsOnCancel(t *testing.T) {
 		t.Fatal("sendTyping did not stop after context cancel")
 	}
 	assert.GreaterOrEqual(t, called, 1, "should have called sendChatAction at least once")
+}
+
+func TestExtractAttachment_DistinctPhotosGetDistinctNames(t *testing.T) {
+	first := extractAttachment(&models.Message{Photo: []models.PhotoSize{{FileID: "p1", FileUniqueID: "u1"}}})
+	second := extractAttachment(&models.Message{Photo: []models.PhotoSize{{FileID: "p2", FileUniqueID: "u2"}}})
+
+	assert.NotEqual(t, first.filename, second.filename)
+}
+
+func TestFetchToFile_ErrorOmitsLink(t *testing.T) {
+	link := "http://invalid.localhost:1/file/botSECRET-TOKEN/photos/a.jpg"
+
+	err := fetchToFile(context.Background(), link, filepath.Join(t.TempDir(), "out"))
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "SECRET-TOKEN")
 }
