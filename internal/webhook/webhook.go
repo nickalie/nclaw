@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/nickalie/nclaw/internal/cli"
+	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/pipeline"
@@ -134,6 +135,10 @@ func (m *Manager) HandleIncoming(webhookID string, req IncomingRequest) error {
 	}
 	if webhook.Status != model.WebhookStatusActive {
 		return ErrWebhookInactive
+	}
+	if !config.IsChatAllowed(webhook.ChatID) {
+		log.Printf("webhook: rejecting %s for non-whitelisted chat=%d", webhookID, webhook.ChatID)
+		return ErrWebhookNotFound
 	}
 
 	select {

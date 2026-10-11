@@ -20,6 +20,8 @@ func NewServer(manager *Manager) *Server {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 		BodyLimit:             256 * 1024, // 256KB max body for webhook payloads
+		// Request values outlive the handler in HandleIncoming's goroutine, so they must not alias pooled buffers.
+		Immutable: true,
 	})
 
 	s := &Server{

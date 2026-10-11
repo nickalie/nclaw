@@ -183,3 +183,8 @@ func TestServer_ResponseBody(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Not Found", string(bodyBytes))
 }
+
+func TestNewServer_ImmutableRequestValues(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	assert.True(t, srv.app.Config().Immutable)
+}

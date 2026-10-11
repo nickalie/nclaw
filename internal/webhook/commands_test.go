@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -262,6 +263,17 @@ func TestHandleIncoming_Inactive(t *testing.T) {
 	err = m.HandleIncoming(wh.ID, IncomingRequest{Method: "POST"})
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrWebhookInactive)
+}
+
+func TestHandleIncoming_NonWhitelistedChat(t *testing.T) {
+	viper.Set("telegram.whitelist_chat_ids", "200")
+	defer viper.Reset()
+	m := setupTestManager(t)
+	wh, err := m.Create("stale hook", 100, 0)
+	require.NoError(t, err)
+
+	err = m.HandleIncoming(wh.ID, IncomingRequest{Method: "POST"})
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
 }
 
 func TestBuildIncomingPrompt(t *testing.T) {
