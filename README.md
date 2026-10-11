@@ -157,7 +157,7 @@ NClaw provides six Docker images, all based on `node:24-alpine` with shared tool
 | **Copilot** | `copilot` | GitHub Copilot | Medium |
 | **Gemini** | `gemini` | Google Gemini CLI | Medium |
 
-Images that include Claude Code run `claude update` on container start and then once a day (60s timeout; on failure the current version is kept), so long-running containers stay on the latest Claude Code release without a restart.
+Images that include Claude Code run `claude update` on container start and then once a day (60s timeout; on failure the current version is kept), so long-running containers stay on the latest Claude Code release without a restart. All images run under `tini` as PID 1 to reap orphaned processes.
 
 All images are published to `ghcr.io/nickalie/nclaw` and built for **linux/amd64** and **linux/arm64**. Docker automatically pulls the correct architecture — no extra flags needed. This means you can run NClaw on:
 

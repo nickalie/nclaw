@@ -38,7 +38,8 @@ RUN apk add --no-cache \
     gcompat \
     python3 \
     py3-pip \
-    pipx
+    pipx \
+    tini
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium-browser
@@ -68,7 +69,7 @@ COPY .claude/skills/send-file /opt/nclaw-skills/send-file
 COPY .claude/skills/webhook /opt/nclaw-skills/webhook
 
 WORKDIR /app
-ENTRYPOINT ["nclaw"]
+ENTRYPOINT ["/sbin/tini", "--", "nclaw"]
 
 # ---------- claude ----------
 FROM base AS claude
@@ -76,7 +77,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN cp -r /opt/nclaw-skills/* /root/.claude/skills/
 RUN echo '{"autoCompact": true}' > /root/.claude/settings.json
 COPY --chmod=755 docker/claude-entrypoint.sh /usr/local/bin/claude-entrypoint
-ENTRYPOINT ["claude-entrypoint"]
+ENTRYPOINT ["/sbin/tini", "--", "claude-entrypoint"]
 
 # ---------- multi-model ----------
 FROM claude AS multi-model

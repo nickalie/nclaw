@@ -197,4 +197,6 @@ A single `docker/Dockerfile` uses multi-stage targets to produce 6 image variant
 
 Variants with Claude Code (`claude`, `multi-model`, `all`) use `docker/claude-entrypoint.sh`, which runs `claude update` (60s timeout, non-fatal) before `exec nclaw` and then every 24 hours in a background loop, because the native installer's binary lives in `/root/.local` and isn't persisted.
 
+All variants run under `tini` as PID 1, which reaps orphaned processes (the agent CLIs' children, busybox `timeout`'s watcher) that nclaw would otherwise leave as zombies.
+
 CI builds and pushes all six variants to GHCR using a matrix strategy. Custom nclaw skills (`schedule`, `send-file`, `webhook`) and third-party skills are included in all variants.
