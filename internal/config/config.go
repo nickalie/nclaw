@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -44,7 +45,8 @@ func Init() error {
 		}
 	}
 
-	return nil
+	_, err := parseWhitelist()
+	return err
 }
 
 // TelegramBotToken returns the configured Telegram bot token.
@@ -54,20 +56,53 @@ func TelegramBotToken() string {
 
 // WhitelistChatIDs returns the list of allowed Telegram chat IDs.
 func WhitelistChatIDs() []int64 {
-	raw := viper.GetString("telegram.whitelist_chat_ids")
+	ids, err := parseWhitelist()
+	if err != nil {
+		log.Printf("config: %v", err)
+	}
+	return ids
+}
+
+// IsChatAllowed reports whether the chat is whitelisted; an unset whitelist allows every chat, a malformed one none.
+func IsChatAllowed(chatID int64) bool {
+	ids, err := parseWhitelist()
+	if err != nil {
+		return false
+	}
+	return len(ids) == 0 || slices.Contains(ids, chatID)
+}
+
+func parseWhitelist() ([]int64, error) {
 	var ids []int64
-	for _, s := range strings.Split(raw, ",") {
+	for _, s := range whitelistEntries() {
 		s = strings.TrimSpace(s)
 		if s == "" {
 			continue
 		}
-		if id, err := strconv.ParseInt(s, 10, 64); err == nil {
-			ids = append(ids, id)
-		} else {
-			log.Printf("config: ignoring invalid whitelist chat ID %q: %v", s, err)
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid telegram.whitelist_chat_ids entry %q: expected comma-separated chat IDs", s)
 		}
+		ids = append(ids, id)
 	}
-	return ids
+	return ids, nil
+}
+
+// whitelistEntries accepts both a comma-separated string and a YAML list, which viper.GetString turns into "".
+func whitelistEntries() []string {
+	switch v := viper.Get("telegram.whitelist_chat_ids").(type) {
+	case nil:
+		return nil
+	case []any:
+		entries := make([]string, 0, len(v))
+		for _, item := range v {
+			entries = append(entries, fmt.Sprint(item))
+		}
+		return entries
+	default:
+		// fmt.Sprint keeps an unsupported type (e.g. a YAML map) non-empty so parsing fails closed.
+		return strings.Split(fmt.Sprint(v), ",")
+	}
 }
 
 // StartupNotification reports whether the bot should send a startup

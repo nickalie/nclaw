@@ -264,8 +264,49 @@ func TestWhitelistChatIDs_InvalidValues(t *testing.T) {
 	viper.Set("telegram.whitelist_chat_ids", "abc,123,def")
 	defer viper.Reset()
 
-	ids := WhitelistChatIDs()
-	assert.Equal(t, []int64{123}, ids)
+	assert.Empty(t, WhitelistChatIDs())
+}
+
+func TestWhitelistChatIDs_YAMLList(t *testing.T) {
+	viper.Set("telegram.whitelist_chat_ids", []any{111, "222"})
+	defer viper.Reset()
+
+	assert.Equal(t, []int64{111, 222}, WhitelistChatIDs())
+}
+
+func TestIsChatAllowed(t *testing.T) {
+	tests := []struct {
+		name      string
+		whitelist any
+		chatID    int64
+		allowed   bool
+	}{
+		{"unset allows any chat", "", 999, true},
+		{"listed chat", "100,200", 200, true},
+		{"unlisted chat", "100,200", 999, false},
+		{"yaml list", []any{100, 200}, 100, true},
+		{"space separated is malformed", "100 200", 100, false},
+		{"partially invalid denies all", "abc,100", 100, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper.Set("telegram.whitelist_chat_ids", tt.whitelist)
+			defer viper.Reset()
+
+			assert.Equal(t, tt.allowed, IsChatAllowed(tt.chatID))
+		})
+	}
+}
+
+func TestInit_InvalidWhitelist(t *testing.T) {
+	viper.Reset()
+	viper.Set("telegram.bot_token", "token")
+	viper.Set("data_dir", "/tmp/test")
+	viper.Set("telegram.whitelist_chat_ids", "100;200")
+	defer viper.Reset()
+
+	err := Init()
+	assert.ErrorContains(t, err, "whitelist_chat_ids")
 }
 
 func TestInit_PartialRequired(t *testing.T) {
@@ -277,4 +318,22 @@ func TestInit_PartialRequired(t *testing.T) {
 	err := Init()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "data_dir")
+}
+
+func TestInit_WhitelistOfUnsupportedTypeFailsClosed(t *testing.T) {
+	viper.Reset()
+	viper.Set("telegram.bot_token", "token")
+	viper.Set("data_dir", "/tmp/test")
+	viper.Set("telegram.whitelist_chat_ids", map[string]any{"123456": true})
+	defer viper.Reset()
+
+	assert.Error(t, Init())
+	assert.False(t, IsChatAllowed(123456))
+}
+
+func TestWhitelistChatIDs_YAMLScalarInt(t *testing.T) {
+	viper.Set("telegram.whitelist_chat_ids", 42)
+	defer viper.Reset()
+
+	assert.Equal(t, []int64{42}, WhitelistChatIDs())
 }
