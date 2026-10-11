@@ -27,7 +27,7 @@ Fields:
 - `type`: Schedule type (required). Choose carefully:
   - `"cron"` — Standard 5-field cron expression (minute hour day month weekday). For recurring at specific times.
   - `"interval"` — Go duration string (e.g., `"5m"`, `"1h30m"`, `"24h"`). For REPEATING every N time. Only use when the user explicitly wants repetition ("every hour", "each 5 minutes").
-  - `"once"` — Local ISO 8601 timestamp WITHOUT "Z" suffix. For ONE-TIME reminders/actions. Use this for "remind me in X minutes", "do X at 3pm", "in 1 hour do Y". Calculate the target timestamp from current time.
+  - `"once"` — Local ISO 8601 timestamp WITHOUT "Z" suffix. For ONE-TIME reminders/actions. Use this for "remind me in X minutes", "do X at 3pm", "in 1 hour do Y". The timestamp is read in the scheduler's timezone: calculate it from the "Scheduler time" line in your system prompt, not from the system clock, which may be in a different timezone.
 - `value`: The schedule expression (required)
 - `context`: `"group"` (default) or `"isolated"` (optional)
 

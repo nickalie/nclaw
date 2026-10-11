@@ -236,7 +236,7 @@ docker run -d --name nclaw \
   ghcr.io/nickalie/nclaw:copilot
 ```
 
-Copilot uses GitHub OAuth authentication. Mount your config file from `~/.copilot/config.json`. To obtain credentials, install Copilot CLI locally (`npm install -g @githubnext/github-copilot-cli`) and run `/login`.
+Copilot uses GitHub OAuth authentication. Mount your config file from `~/.copilot/config.json`. To obtain credentials, install Copilot CLI locally (`npm install -g @github/copilot`) and run `/login`.
 
 ### Gemini
 
@@ -430,7 +430,7 @@ kubectl create secret generic my-gemini-secret \
 
 ## Running without Docker
 
-NClaw is a regular executable and can run directly on any machine. The only runtime dependency is the CLI for your chosen agent — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default), [claudish](https://github.com/MadAppGang/claudish) (multi-model), [OpenAI Codex](https://github.com/openai/codex), [GitHub Copilot](https://docs.github.com/en/copilot/github-copilot-in-the-cli), or [Gemini CLI](https://github.com/google-gemini/gemini-cli) — it must be installed and available in `PATH`.
+NClaw is a regular executable and can run directly on any machine. The only runtime dependency is the CLI for your chosen agent — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default), [claudish](https://github.com/MadAppGang/claudish) (multi-model), [OpenAI Codex](https://github.com/openai/codex), [GitHub Copilot](https://github.com/github/copilot-cli), or [Gemini CLI](https://github.com/google-gemini/gemini-cli) — it must be installed and available in `PATH`.
 
 > **Security notice:** Without Docker, the CLI agent runs directly on the host with the same permissions as the nclaw process. It has full access to the file system, network, and any credentials available to the user. Run under a dedicated unprivileged user and avoid running as root. For production use, Docker or Kubernetes deployment is strongly recommended.
 
@@ -529,7 +529,7 @@ NClaw variables use the `NCLAW_` prefix. Provider API keys use the provider's na
 | `NCLAW_CLI` | No | `claude` | CLI agent: `claude`, `claudish` (multi-model), `codex`, `copilot`, or `gemini`. Auto-selects `claudish` when `NCLAW_MODEL` is set |
 | `NCLAW_CLAUDE_EXEC_PATH` | No | `claude` | Full path to the Claude CLI binary |
 | `NCLAW_MODEL` | No | — | Model for multi-model backend (e.g. `g@gemini-2.5-pro`). Setting this auto-selects multi-model |
-| `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | No | — | Comma-separated list of allowed Telegram chat IDs. If unset, accepts all chats (with a security warning) |
+| `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` | No | — | Comma-separated list of allowed Telegram chat IDs. If unset, accepts all chats (with a security warning). An invalid entry stops startup. Also applies to scheduled tasks and webhooks |
 | `NCLAW_DB_PATH` | No | `{data_dir}/nclaw.db` | Path to the SQLite database |
 | `NCLAW_TIMEZONE` | No | system local | Timezone for the scheduler (e.g. `Europe/Berlin`) |
 | `NCLAW_WEBHOOK_BASE_DOMAIN` | No | — | Base domain for webhook URLs (required when using webhooks) |
@@ -572,7 +572,7 @@ Every morning at 8am, give me a weather summary and top news headlines
 At 3pm today, generate a summary of today's git commits
 ```
 
-Tasks persist across restarts. Each task can either continue the existing chat session or run in a fresh isolated context.
+Tasks persist across restarts. Each task can either continue the existing chat session or run in a fresh isolated context. Isolated runs are not saved as sessions, so the chat keeps its conversation; with the Gemini and Copilot backends the CLI cannot skip saving, and the next message continues the isolated run instead.
 
 ## Webhooks
 

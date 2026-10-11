@@ -67,13 +67,13 @@ Three input channels (handler, scheduler, webhook) each invoke the configured CL
 ## Key Patterns
 
 ### CLI Backend Interface (`internal/cli/`)
-All CLI backends implement two interfaces: `cli.Client` (per-request builder with `Dir()`, `SkipPermissions()`, `AppendSystemPrompt()`, `Ask()`, `Continue()`) and `cli.Provider` (singleton with `NewClient()`, `PreInvoke()`, `Version()`, `Name()`). The `*cli.Result` struct has `Text` (final message for display) and `FullText` (all messages for command block scanning). Consumers use only these interfaces, making them backend-agnostic.
+All CLI backends implement two interfaces: `cli.Client` (per-request builder with `Dir()`, `SkipPermissions()`, `AppendSystemPrompt()`, `Ask()`, `Continue()`) and `cli.Provider` (singleton with `NewClient()`, `PreInvoke()`, `Version()`, `Name()`). The `*cli.Result` struct has `Text` (final message for display) and `FullText` (all messages for command block scanning). Consumers use only these interfaces, making them backend-agnostic. `Ask()` (used only for `isolated` scheduled tasks) must not save a session that a later `Continue()` would resume: Claude/Claudish pass `--no-session-persistence`, Codex `--ephemeral`.
 
 ### CLI Adapters
 - **Claude** (`internal/cli/claude/`): Stream-json output parsing via shared `streamjson` package. Claude-specific methods (`Model`, `FallbackModel`, `Resume`) remain on the concrete `*Claude` type. `PreInvoke()` handles OAuth token refresh.
 - **Claudish** (`internal/cli/claudish/`): Wraps Claude Code via [claudish](https://github.com/MadAppGang/claudish), proxying API calls to alternative providers (OpenRouter, Gemini, OpenAI, Ollama, LM Studio, etc.). Uses the same stream-json output format as Claude, parsed via the shared `streamjson` package. Passes model config (`--model` flag) and model tier overrides (`CLAUDISH_MODEL_OPUS/SONNET/HAIKU/SUBAGENT`) as environment variables. Provider API keys (e.g. `OPENROUTER_API_KEY`, `GEMINI_API_KEY`) pass through from the OS environment. `PreInvoke()` is a no-op.
 - **Codex** (`internal/cli/codex/`): JSONL event parsing (`item.completed` with `type: "agent_message"`). System prompt written to `AGENTS.md` in the working directory.
-- **Copilot** (`internal/cli/copilot/`): Plain text output via `-s` flag (`Text == FullText`). System prompt written to `.github/copilot-instructions.md`. Known limitation: no structured output, so command blocks in intermediate messages are not captured.
+- **Copilot** (`internal/cli/copilot/`): Plain text output via `-s` flag (`Text == FullText`). System prompt written to `.github/copilot-instructions.md`. Known limitation: no structured output, so command blocks in intermediate messages are not captured. No flag to skip session saving, so an `isolated` scheduled run becomes the session the next `--continue` resumes (Gemini has the same limitation).
 - **Gemini** (`internal/cli/gemini/`): NDJSON stream-json output parsing (`--output-format stream-json`) with its own event types (message, tool_use, tool_result, error, result). System prompt written to `GEMINI.md` in the working directory. Uses `--approval-mode yolo` for auto-approve. `PreInvoke()` is a no-op.
 
 ### OAuth Token Refresh
@@ -115,7 +115,7 @@ Optional:
 - `NCLAW_MODEL_SONNET` - Claudish Sonnet-tier model override
 - `NCLAW_MODEL_HAIKU` - Claudish Haiku-tier model override
 - `NCLAW_MODEL_SUBAGENT` - Claudish subagent model override
-- `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` - Comma-separated list of allowed Telegram chat IDs (if unset, bot accepts all chats with a security warning)
+- `NCLAW_TELEGRAM_WHITELIST_CHAT_IDS` - Comma-separated list (or YAML list) of allowed Telegram chat IDs (if unset, bot accepts all chats with a security warning; an invalid entry fails startup). Enforced by the handler, scheduler and webhook manager
 - `NCLAW_STARTUP_NOTIFICATION` - Send a "bot started" notification to whitelisted chats on startup (default: `false`)
 - `NCLAW_STREAM_MESSAGES` - Send every assistant message from the CLI's JSON stream as a separate reply instead of only the final one (default: `false`). For Claude/Claudish in the Telegram handler, messages are delivered live as they arrive (real-time streaming); other backends/channels split the final buffered output
 - `NCLAW_DB_PATH` - SQLite path (default: `{data_dir}/nclaw.db`)

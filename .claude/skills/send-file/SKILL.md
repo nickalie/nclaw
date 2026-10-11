@@ -28,7 +28,7 @@ Wrap each send-file command in a fenced code block with language `nclaw:sendfile
 
 1. The file must exist on disk before you emit the send-file block. Create or generate it first.
 2. One file per code block. Use multiple code blocks for multiple files.
-3. When multiple files are sent, they are automatically grouped into a Telegram media group (album). No extra syntax needed.
+3. When multiple files are sent, files of the same kind are grouped into Telegram albums: photos and videos together, documents together, audio together. Files of different kinds arrive as separate messages. No extra syntax needed.
 4. Include the send-file block naturally within your response — the system will strip it before showing the response to the user.
 5. Always tell the user what file you're sending in your response text.
 
