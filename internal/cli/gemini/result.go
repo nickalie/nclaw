@@ -1,10 +1,8 @@
 package gemini
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
-	"log"
 	"strings"
 
 	"github.com/nickalie/nclaw/internal/cli"
@@ -42,14 +40,11 @@ func parseStreamJSONOutput(output []byte) *cli.Result {
 // for a single assistant turn; these are concatenated. A new logical message starts
 // when a non-assistant event (tool_use, tool_result, etc.) appears between assistant events.
 func collectAssistantMessages(output []byte) []string {
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
 	var messages []string
 	var current strings.Builder
 
-	for scanner.Scan() {
-		line := scanner.Bytes()
+	for line := range bytes.Lines(output) {
+		line = bytes.TrimSpace(line)
 		text := extractAssistantContent(line)
 
 		if text != "" {
@@ -62,10 +57,6 @@ func collectAssistantMessages(output []byte) []string {
 
 	if current.Len() > 0 {
 		messages = append(messages, current.String())
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Printf("gemini: stream-json scan error (output may be truncated): %v", err)
 	}
 
 	return messages

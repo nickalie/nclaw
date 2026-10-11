@@ -240,3 +240,28 @@ func TestBuilderFieldValues(t *testing.T) {
 	assert.Equal(t, "custom prompt", c.systemPrompt)
 	assert.True(t, c.skipPermissions)
 }
+
+func writeFakeCodex(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "codex")
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755))
+	return path
+}
+
+func TestAsk_IsEphemeral(t *testing.T) {
+	c := New()
+	c.bin.ExecPath(writeFakeCodex(t))
+
+	_, err := c.Ask("hello")
+	require.NoError(t, err)
+	assert.Contains(t, c.bin.Args(), "--ephemeral")
+}
+
+func TestContinue_IsNotEphemeral(t *testing.T) {
+	c := New()
+	c.bin.ExecPath(writeFakeCodex(t))
+
+	_, err := c.Continue("hello")
+	require.NoError(t, err)
+	assert.NotContains(t, c.bin.Args(), "--ephemeral")
+}

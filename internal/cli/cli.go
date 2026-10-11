@@ -20,6 +20,7 @@ type Client interface {
 	Dir(dir string) Client
 	SkipPermissions() Client
 	AppendSystemPrompt(prompt string) Client
+	// Ask runs a one-off query that must not become the session a later Continue resumes.
 	Ask(query string) (*Result, error)
 	Continue(query string) (*Result, error)
 }

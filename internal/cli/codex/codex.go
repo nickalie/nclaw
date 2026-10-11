@@ -55,7 +55,7 @@ func (c *Codex) Ask(query string) (*cli.Result, error) {
 		return &cli.Result{}, fmt.Errorf("codex: write system prompt: %w", err)
 	}
 
-	c.prepare()
+	c.prepare("--ephemeral")
 	return c.runAndParse(query)
 }
 

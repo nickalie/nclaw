@@ -2,10 +2,12 @@ package claudish
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNew(t *testing.T) {
@@ -273,4 +275,29 @@ func TestSanitizeOutput_EmptyOutput(t *testing.T) {
 	c := New()
 	assert.Equal(t, "", c.sanitizeOutput(""))
 	assert.Equal(t, "", c.sanitizeOutput("  \n  "))
+}
+
+func writeFakeBin(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "claudish")
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\necho '{\"type\":\"result\",\"result\":\"ok\"}'\n"), 0o755))
+	return path
+}
+
+func TestAsk_DisablesSessionPersistence(t *testing.T) {
+	c := New()
+	c.bin.ExecPath(writeFakeBin(t))
+
+	_, err := c.Ask("hello")
+	require.NoError(t, err)
+	assert.Contains(t, c.bin.Args(), "--no-session-persistence")
+}
+
+func TestContinue_KeepsSessionPersistence(t *testing.T) {
+	c := New()
+	c.bin.ExecPath(writeFakeBin(t))
+
+	_, err := c.Continue("hello")
+	require.NoError(t, err)
+	assert.NotContains(t, c.bin.Args(), "--no-session-persistence")
 }

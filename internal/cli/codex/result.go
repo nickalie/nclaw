@@ -1,10 +1,8 @@
 package codex
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
-	"log"
 	"strings"
 
 	"github.com/nickalie/nclaw/internal/cli"
@@ -42,19 +40,12 @@ func parseJSONLOutput(output []byte) *cli.Result {
 // collectAgentMessages scans JSONL lines for item.completed events
 // with type "agent_message" and returns their text content.
 func collectAgentMessages(output []byte) []string {
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
 	var messages []string
 
-	for scanner.Scan() {
-		if text := extractAgentMessage(scanner.Bytes()); text != "" {
+	for line := range bytes.Lines(output) {
+		if text := extractAgentMessage(bytes.TrimSpace(line)); text != "" {
 			messages = append(messages, text)
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Printf("codex: JSONL scan error (output may be truncated): %v", err)
 	}
 
 	return messages

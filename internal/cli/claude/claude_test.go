@@ -527,3 +527,21 @@ func TestOnMessage_NotSet_NoStreaming(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "hi", result.Text)
 }
+
+func TestAsk_DisablesSessionPersistence(t *testing.T) {
+	path := writeFakeClaude(t, `{"type":"result","result":"ok"}`)
+
+	c := New().ExecPath(path)
+	_, err := c.Ask("hello")
+	require.NoError(t, err)
+	assert.Contains(t, c.bin.Args(), "--no-session-persistence")
+}
+
+func TestContinue_KeepsSessionPersistence(t *testing.T) {
+	path := writeFakeClaude(t, `{"type":"result","result":"ok"}`)
+
+	c := New().ExecPath(path)
+	_, err := c.Continue("hello")
+	require.NoError(t, err)
+	assert.NotContains(t, c.bin.Args(), "--no-session-persistence")
+}

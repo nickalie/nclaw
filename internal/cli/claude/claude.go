@@ -209,6 +209,7 @@ func (c *Claude) Env(vars []string) *Claude {
 func (c *Claude) Ask(query string) (*cli.Result, error) {
 	c.outputFormat = formatStreamJSON
 	c.verbose = true
+	c.noPersistence = true
 	c.prepare("-p")
 	return c.runAndParse(query)
 }

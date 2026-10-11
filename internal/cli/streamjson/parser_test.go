@@ -202,3 +202,16 @@ func TestStreamWriter_ResultLargeLineNotDropped(t *testing.T) {
 	assert.Equal(t, []string{huge}, result.Messages)
 	assert.Contains(t, result.FullText, huge)
 }
+
+func TestParseOutput_LineOverOneMegabyteDoesNotTruncate(t *testing.T) {
+	huge := `{"type":"user","message":{"content":[{"type":"tool_result","content":"` + strings.Repeat("x", 2<<20) + `"}]}}`
+	output := `{"type":"assistant","message":{"content":[{"type":"text","text":"before"}]}}
+` + huge + `
+{"type":"assistant","message":{"content":[{"type":"text","text":"after"}]}}
+{"type":"result","result":"final"}`
+
+	result := ParseOutput([]byte(output))
+
+	assert.Equal(t, "final", result.Text)
+	assert.Equal(t, []string{"before", "after"}, result.Messages)
+}

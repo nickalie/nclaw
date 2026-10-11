@@ -66,7 +66,7 @@ func (c *Claudish) OnMessage(handler cli.MessageHandler) cli.Client {
 
 // Ask sends a query in print mode and returns the response.
 func (c *Claudish) Ask(query string) (*cli.Result, error) {
-	c.prepare("-p")
+	c.prepare("-p", "--no-session-persistence")
 	return c.runAndParse(query)
 }
 

@@ -1,10 +1,8 @@
 package streamjson
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
-	"log"
 	"strings"
 
 	"github.com/nickalie/nclaw/internal/cli"
@@ -59,11 +57,9 @@ func assembleResult(allText []string, resultText string) *cli.Result {
 }
 
 func collectStreamEvents(output []byte) (allText []string, resultText string) {
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
-	for scanner.Scan() {
-		line := scanner.Bytes()
+	// bytes.Lines has no line-length cap: a large tool_result line must not truncate the stream.
+	for line := range bytes.Lines(output) {
+		line = bytes.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}
@@ -81,10 +77,6 @@ func collectStreamEvents(output []byte) (allText []string, resultText string) {
 		case "result":
 			resultText = event.Result
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Printf("streamjson: scan error (output may be truncated): %v", err)
 	}
 
 	return allText, resultText

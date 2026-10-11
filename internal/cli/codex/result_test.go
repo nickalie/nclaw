@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -140,4 +141,14 @@ func TestCollectAgentMessages_MixedItemTypes(t *testing.T) {
 	messages := collectAgentMessages([]byte(output))
 
 	assert.Equal(t, []string{"Found files.", "Done."}, messages)
+}
+
+func TestParseJSONLOutput_LineOverOneMegabyteDoesNotTruncate(t *testing.T) {
+	huge := `{"type":"item.completed","item":{"id":"item_1","type":"command_execution","aggregated_output":"` +
+		strings.Repeat("x", 2<<20) + `"}}`
+	output := huge + "\n" + `{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"done"}}`
+
+	result := parseJSONLOutput([]byte(output))
+
+	assert.Equal(t, "done", result.Text)
 }
