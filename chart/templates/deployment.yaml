@@ -32,8 +32,8 @@ spec:
             - -c
             - |
               mkdir -p /app/data/.claude /app/data/.config
-              if [ ! -f /app/data/.claude/credentials.json ]; then
-                cp /tmp/credentials/credentials.json /app/data/.claude/credentials.json
+              if [ ! -f /app/data/.claude/.credentials.json ]; then
+                cp /tmp/credentials/credentials.json /app/data/.claude/.credentials.json
               fi
           volumeMounts:
             - name: data
