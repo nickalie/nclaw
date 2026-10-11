@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -891,4 +892,143 @@ func TestClearRunState(t *testing.T) {
 	defer s.mu.Unlock()
 	assert.False(t, s.running[taskID], "running flag should be cleared")
 	assert.False(t, s.canceled[taskID], "canceled flag should be cleared")
+}
+
+func TestExecuteTask_SkipsNonWhitelistedChat(t *testing.T) {
+	viper.Set("telegram.whitelist_chat_ids", "200")
+	defer viper.Reset()
+	s := setupTestSchedulerWithMockCLI(t)
+
+	task := &model.ScheduledTask{
+		ID: "exec-not-whitelisted", ChatID: 100, Prompt: "p",
+		ScheduleType: model.ScheduleInterval, ScheduleValue: "1h",
+		ContextMode: model.ContextGroup, Status: model.StatusActive, CreatedAt: time.Now(),
+	}
+	require.NoError(t, s.db.Create(task).Error)
+
+	s.executeTask(task.ID)
+
+	var count int64
+	s.db.Model(&model.TaskRunLog{}).Where("task_id = ?", task.ID).Count(&count)
+	assert.Equal(t, int64(0), count)
+}
+
+func TestRecordResults_PausedDuringRunStaysPaused(t *testing.T) {
+	s := setupTestSchedulerWithMockCLI(t)
+	s.Start()
+	defer s.Shutdown()
+
+	task := &model.ScheduledTask{
+		ID: "paused-mid-run", ChatID: 100, Prompt: "p",
+		ScheduleType: model.ScheduleInterval, ScheduleValue: "1h",
+		ContextMode: model.ContextGroup, Status: model.StatusActive, CreatedAt: time.Now(),
+	}
+	require.NoError(t, s.CreateTask(task))
+	require.NoError(t, s.PauseTask(task.ID))
+
+	require.NoError(t, s.recordResults(task, "reply", nil, time.Second))
+
+	var stored model.ScheduledTask
+	require.NoError(t, s.db.First(&stored, "id = ?", task.ID).Error)
+	assert.Equal(t, model.StatusPaused, stored.Status)
+	require.NoError(t, s.ResumeTask(task.ID))
+}
+
+func TestRecordResults_OnceSuccessCompletes(t *testing.T) {
+	s := setupTestSchedulerWithMockCLI(t)
+	s.Start()
+	defer s.Shutdown()
+
+	task := &model.ScheduledTask{
+		ID: "once-success", ChatID: 100, Prompt: "p",
+		ScheduleType:  model.ScheduleOnce,
+		ScheduleValue: time.Now().Add(time.Hour).UTC().Format("2006-01-02T15:04:05"),
+		ContextMode:   model.ContextIsolated, Status: model.StatusActive, CreatedAt: time.Now(),
+	}
+	require.NoError(t, s.db.Create(task).Error)
+
+	require.NoError(t, s.recordResults(task, "reply", nil, time.Second))
+
+	var stored model.ScheduledTask
+	require.NoError(t, s.db.First(&stored, "id = ?", task.ID).Error)
+	assert.Equal(t, model.StatusCompleted, stored.Status)
+}
+
+func TestCreateTask_PersistsNextRun(t *testing.T) {
+	s := setupTestScheduler(t)
+	s.Start()
+	defer s.Shutdown()
+
+	task := &model.ScheduledTask{
+		ID: "persist-next", ChatID: 100, Prompt: "p",
+		ScheduleType: model.ScheduleInterval, ScheduleValue: "2h",
+		ContextMode: model.ContextGroup, Status: model.StatusActive, CreatedAt: time.Now(),
+	}
+	require.NoError(t, s.CreateTask(task))
+
+	var stored model.ScheduledTask
+	require.NoError(t, s.db.First(&stored, "id = ?", task.ID).Error)
+	require.NotNil(t, stored.NextRun)
+	assert.WithinDuration(t, time.Now().Add(2*time.Hour), *stored.NextRun, time.Minute)
+}
+
+func TestLoadTasks_IntervalKeepsPersistedNextRun(t *testing.T) {
+	s := setupTestScheduler(t)
+
+	next := time.Now().Add(30 * time.Minute)
+	task := &model.ScheduledTask{
+		ID: "interval-restore", ChatID: 100, Prompt: "p",
+		ScheduleType: model.ScheduleInterval, ScheduleValue: "24h",
+		ContextMode: model.ContextGroup, Status: model.StatusActive, CreatedAt: time.Now(), NextRun: &next,
+	}
+	require.NoError(t, s.db.Create(task).Error)
+
+	s.LoadTasks()
+	s.Start()
+	defer s.Shutdown()
+
+	got := s.resolveNextRun(task)
+	require.NotNil(t, got)
+	assert.WithinDuration(t, next, *got, time.Second)
+}
+
+func TestRestoredStart(t *testing.T) {
+	future := time.Now().Add(time.Hour)
+	past := time.Now().Add(-time.Hour)
+	tests := []struct {
+		name     string
+		task     model.ScheduledTask
+		wantOpts int
+	}{
+		{"interval with future next run", model.ScheduledTask{ScheduleType: model.ScheduleInterval, NextRun: &future}, 1},
+		{"interval with missed next run", model.ScheduledTask{ScheduleType: model.ScheduleInterval, NextRun: &past}, 1},
+		{"interval never run anchors at creation", model.ScheduledTask{ScheduleType: model.ScheduleInterval, CreatedAt: past}, 1},
+		{"interval without next run or creation time", model.ScheduledTask{ScheduleType: model.ScheduleInterval}, 0},
+		{"cron ignores next run", model.ScheduledTask{ScheduleType: model.ScheduleCron, NextRun: &future}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Len(t, restoredStart(&tt.task), tt.wantOpts)
+		})
+	}
+}
+
+func TestLoadTasks_NeverRunIntervalKeepsCadenceFromCreation(t *testing.T) {
+	s := setupTestScheduler(t)
+
+	created := time.Now().Add(-90 * time.Minute)
+	task := &model.ScheduledTask{
+		ID: "interval-legacy", ChatID: 100, Prompt: "p",
+		ScheduleType: model.ScheduleInterval, ScheduleValue: "1h",
+		ContextMode: model.ContextGroup, Status: model.StatusActive, CreatedAt: created,
+	}
+	require.NoError(t, s.db.Create(task).Error)
+
+	s.LoadTasks()
+	s.Start()
+	defer s.Shutdown()
+
+	got := s.resolveNextRun(task)
+	require.NotNil(t, got)
+	assert.WithinDuration(t, created.Add(2*time.Hour), *got, time.Second)
 }

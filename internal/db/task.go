@@ -43,7 +43,7 @@ func UpdateTaskStatus(database *gorm.DB, id, status string) error {
 	return database.Model(&model.ScheduledTask{}).Where("id = ?", id).Update("status", status).Error
 }
 
-// UpdateTaskAfterRun updates last_run, last_result, next_run, and optionally status.
+// UpdateTaskAfterRun updates last_run, last_result and next_run.
 func UpdateTaskAfterRun(database *gorm.DB, id string, nextRun *time.Time, lastResult string) error {
 	now := time.Now()
 	updates := map[string]any{
@@ -51,10 +51,12 @@ func UpdateTaskAfterRun(database *gorm.DB, id string, nextRun *time.Time, lastRe
 		"last_result": &lastResult,
 		"next_run":    nextRun,
 	}
-	if nextRun == nil {
-		updates["status"] = model.StatusCompleted
-	}
 	return database.Model(&model.ScheduledTask{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// UpdateTaskNextRun sets next_run of a task.
+func UpdateTaskNextRun(database *gorm.DB, id string, nextRun *time.Time) error {
+	return database.Model(&model.ScheduledTask{}).Where("id = ?", id).Update("next_run", nextRun).Error
 }
 
 // DeleteTask removes a task and its run logs.

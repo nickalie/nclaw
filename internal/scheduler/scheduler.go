@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/nickalie/nclaw/internal/cli"
+	"github.com/nickalie/nclaw/internal/config"
 	"github.com/nickalie/nclaw/internal/db"
 	"github.com/nickalie/nclaw/internal/model"
 	"github.com/nickalie/nclaw/internal/pipeline"
@@ -91,7 +92,7 @@ func (s *Scheduler) LoadTasks() {
 
 	var loaded int
 	for i := range tasks {
-		if err := s.addJob(&tasks[i]); err != nil {
+		if err := s.addJob(&tasks[i], restoredStart(&tasks[i])...); err != nil {
 			log.Printf("scheduler: load task %s: %v", tasks[i].ID, err)
 		} else {
 			loaded++
@@ -112,6 +113,7 @@ func (s *Scheduler) CreateTask(task *model.ScheduledTask) error {
 		}
 		return fmt.Errorf("scheduler: add job: %w", err)
 	}
+	s.persistNextRun(task)
 	log.Printf("scheduler: created task %s (%s: %s) prompt=%q", task.ID, task.ScheduleType, task.ScheduleValue, truncate(task.Prompt, 60))
 	return nil
 }
@@ -155,6 +157,7 @@ func (s *Scheduler) ResumeTask(id string) error {
 		}
 		return fmt.Errorf("scheduler: resume add job: %w", err)
 	}
+	s.persistNextRun(task)
 	log.Printf("scheduler: resumed task %s", id)
 	return nil
 }
@@ -179,19 +182,18 @@ func (s *Scheduler) CancelTask(id string) error {
 }
 
 // addJob creates a gocron job for the given task.
-func (s *Scheduler) addJob(task *model.ScheduledTask) error {
+func (s *Scheduler) addJob(task *model.ScheduledTask, extra ...gocron.JobOption) error {
 	def, err := s.jobDefinition(task)
 	if err != nil {
 		return err
 	}
 
 	taskID := task.ID
-	job, err := s.cron.NewJob(
-		def,
-		gocron.NewTask(s.executeTask, taskID),
+	opts := append([]gocron.JobOption{
 		gocron.WithName(taskID),
 		gocron.WithSingletonMode(gocron.LimitModeReschedule),
-	)
+	}, extra...)
+	job, err := s.cron.NewJob(def, gocron.NewTask(s.executeTask, taskID), opts...)
 	if err != nil {
 		return fmt.Errorf("new job: %w", err)
 	}
@@ -201,6 +203,38 @@ func (s *Scheduler) addJob(task *model.ScheduledTask) error {
 	s.mu.Unlock()
 
 	return nil
+}
+
+// restoredStart keeps an interval task's persisted schedule across restarts instead of restarting its countdown.
+func restoredStart(task *model.ScheduledTask) []gocron.JobOption {
+	if task.ScheduleType != model.ScheduleInterval {
+		return nil
+	}
+	if task.NextRun == nil {
+		if task.CreatedAt.IsZero() {
+			return nil
+		}
+		// Never run yet: keep the cadence anchored at creation; gocron rolls a past start forward by the interval.
+		return []gocron.JobOption{gocron.WithStartAt(gocron.WithStartDateTimePast(task.CreatedAt))}
+	}
+	if task.NextRun.After(time.Now()) {
+		// WithStartDateTime would fail NewJob if NextRun passes before gocron's own clock check.
+		return []gocron.JobOption{gocron.WithStartAt(gocron.WithStartDateTimePast(*task.NextRun))}
+	}
+	return []gocron.JobOption{gocron.WithStartAt(gocron.WithStartImmediately())}
+}
+
+// persistNextRun stores the job's next run so it survives restarts and shows in task lists.
+func (s *Scheduler) persistNextRun(task *model.ScheduledTask) {
+	nextRun := s.resolveNextRun(task)
+	if nextRun == nil {
+		return
+	}
+	if err := db.UpdateTaskNextRun(s.db, task.ID, nextRun); err != nil {
+		log.Printf("scheduler: persist next run for task %s: %v", task.ID, err)
+		return
+	}
+	task.NextRun = nextRun
 }
 
 // removeJob removes a gocron job for the given task ID.
@@ -255,6 +289,10 @@ func (s *Scheduler) executeTask(taskID string) {
 	}
 	if task.Status != model.StatusActive {
 		log.Printf("scheduler: skipping task %s (status=%s)", taskID, task.Status)
+		return
+	}
+	if !config.IsChatAllowed(task.ChatID) {
+		log.Printf("scheduler: skipping task %s for non-whitelisted chat=%d", taskID, task.ChatID)
 		return
 	}
 
@@ -383,10 +421,13 @@ func (s *Scheduler) updateAfterRunTx(
 	if err := db.UpdateTaskAfterRun(tx, task.ID, nextRun, resultSummary); err != nil {
 		return err
 	}
-	if runErr != nil && task.ScheduleType == model.ScheduleOnce {
+	if task.ScheduleType != model.ScheduleOnce {
+		return nil
+	}
+	if runErr != nil {
 		return db.UpdateTaskStatus(tx, task.ID, model.StatusFailed)
 	}
-	return nil
+	return db.UpdateTaskStatus(tx, task.ID, model.StatusCompleted)
 }
 
 func (s *Scheduler) resolveNextRun(task *model.ScheduledTask) *time.Time {
@@ -437,7 +478,13 @@ func (s *Scheduler) getNextRun(jobID uuid.UUID) *time.Time {
 }
 
 // FormatTaskList returns a system prompt section listing current tasks for a chat/thread.
+// It starts with the scheduler's clock, since "once" and cron values are read in its timezone, not the container's.
 func (s *Scheduler) FormatTaskList(chatID int64, threadID int) string {
+	now := time.Now().In(s.loc)
+	return fmt.Sprintf("Scheduler time: %s (%s)\n", now.Format("2006-01-02T15:04:05"), s.loc) + s.taskList(chatID, threadID)
+}
+
+func (s *Scheduler) taskList(chatID int64, threadID int) string {
 	tasks, err := db.ListTasksByChat(s.db, chatID, threadID)
 	if err != nil {
 		log.Printf("scheduler: list tasks: %v", err)

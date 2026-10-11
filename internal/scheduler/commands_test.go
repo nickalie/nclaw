@@ -194,7 +194,23 @@ func TestTruncate(t *testing.T) {
 func TestFormatTaskList_Empty(t *testing.T) {
 	s := setupTestScheduler(t)
 	result := s.FormatTaskList(100, 0)
-	assert.Equal(t, "Current scheduled tasks: none", result)
+	assert.True(t, strings.HasSuffix(result, "\nCurrent scheduled tasks: none"))
+}
+
+func TestFormatTaskList_StartsWithSchedulerClock(t *testing.T) {
+	s := setupTestScheduler(t)
+	loc, err := time.LoadLocation("Asia/Tokyo")
+	require.NoError(t, err)
+	s.loc = loc
+
+	result := s.FormatTaskList(100, 0)
+
+	line, _, _ := strings.Cut(result, "\n")
+	assert.True(t, strings.HasSuffix(line, "(Asia/Tokyo)"), line)
+	stamp := strings.TrimSuffix(strings.TrimPrefix(line, "Scheduler time: "), " (Asia/Tokyo)")
+	parsed, err := time.ParseInLocation("2006-01-02T15:04:05", stamp, loc)
+	require.NoError(t, err)
+	assert.WithinDuration(t, time.Now(), parsed, 5*time.Second)
 }
 
 func TestFormatTaskList_WithTasks(t *testing.T) {
@@ -241,5 +257,5 @@ func TestFormatTaskList_DifferentChat(t *testing.T) {
 
 	// Should not appear for chat 100
 	result := s.FormatTaskList(100, 0)
-	assert.Equal(t, "Current scheduled tasks: none", result)
+	assert.True(t, strings.HasSuffix(result, "\nCurrent scheduled tasks: none"))
 }

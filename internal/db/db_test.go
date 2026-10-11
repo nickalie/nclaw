@@ -141,19 +141,35 @@ func TestUpdateTaskAfterRun_WithNextRun(t *testing.T) {
 	assert.NotNil(t, got.LastRun)
 	assert.NotNil(t, got.LastResult)
 	assert.Equal(t, "done", *got.LastResult)
-	assert.Equal(t, model.StatusActive, got.Status) // not completed because nextRun is set
+	assert.Equal(t, model.StatusActive, got.Status)
 }
 
-func TestUpdateTaskAfterRun_NilNextRun(t *testing.T) {
+func TestUpdateTaskAfterRun_NilNextRunKeepsStatus(t *testing.T) {
 	database := setupTestDB(t)
 	task := sampleTask(100, 0)
 	require.NoError(t, CreateTask(database, task))
+	require.NoError(t, UpdateTaskStatus(database, task.ID, model.StatusPaused))
 
 	require.NoError(t, UpdateTaskAfterRun(database, task.ID, nil, "final"))
 
 	got, err := GetTask(database, task.ID)
 	require.NoError(t, err)
-	assert.Equal(t, model.StatusCompleted, got.Status) // completed because nextRun is nil
+	assert.Equal(t, model.StatusPaused, got.Status)
+	assert.Nil(t, got.NextRun)
+}
+
+func TestUpdateTaskNextRun(t *testing.T) {
+	database := setupTestDB(t)
+	task := sampleTask(100, 0)
+	require.NoError(t, CreateTask(database, task))
+
+	nextRun := time.Now().Add(time.Hour)
+	require.NoError(t, UpdateTaskNextRun(database, task.ID, &nextRun))
+
+	got, err := GetTask(database, task.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.NextRun)
+	assert.WithinDuration(t, nextRun, *got.NextRun, time.Second)
 }
 
 func TestDeleteTask(t *testing.T) {
