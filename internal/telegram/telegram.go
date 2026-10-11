@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 // Prompt is the system prompt for formatting output as Telegram HTML.
@@ -39,12 +40,22 @@ func SplitMessage(text string, maxLen int) []string {
 		}
 		cut := strings.LastIndex(text[:maxLen], "\n")
 		if cut <= 0 {
-			cut = maxLen
+			cut = runeBoundary(text, maxLen)
 		}
 		chunks = append(chunks, text[:cut])
 		text = strings.TrimLeft(text[cut:], "\n")
 	}
 	return chunks
+}
+
+// runeBoundary moves n back to the start of a UTF-8 rune so a forced cut never splits a character.
+func runeBoundary(text string, n int) int {
+	for i := n; i > 0; i-- {
+		if utf8.RuneStart(text[i]) {
+			return i
+		}
+	}
+	return n
 }
 
 // ChatDir returns the session directory for a given chat/thread under the base data directory.

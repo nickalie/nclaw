@@ -3,6 +3,7 @@ package telegram
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -55,4 +56,16 @@ func TestChatDir_WithThread(t *testing.T) {
 func TestChatDir_NegativeChatID(t *testing.T) {
 	dir := ChatDir("/data", -100123, 0)
 	assert.Equal(t, "/data/-100123", dir)
+}
+
+func TestSplitMessage_ForceSplitKeepsRunesWhole(t *testing.T) {
+	text := strings.Repeat("я", 10) // 2 bytes per rune
+
+	chunks := SplitMessage(text, 5)
+
+	assert.Equal(t, text, strings.Join(chunks, ""))
+	for _, c := range chunks {
+		assert.True(t, utf8.ValidString(c), "chunk %q is not valid UTF-8", c)
+		assert.LessOrEqual(t, len(c), 5)
+	}
 }
