@@ -2,9 +2,11 @@ package sendfile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -253,4 +255,106 @@ func TestStripBlocks(t *testing.T) {
 func TestStripBlocks_NoBlocks(t *testing.T) {
 	result := StripBlocks("plain text")
 	assert.Equal(t, "plain text", result)
+}
+
+type recordingSenders struct {
+	docs   []string
+	groups [][]string
+}
+
+func (r *recordingSenders) senders(groupErr error) Senders {
+	return Senders{
+		Doc: func(_ context.Context, _ int64, _ int, filename string, _ []byte, _ string) error {
+			r.docs = append(r.docs, filename)
+			return nil
+		},
+		MediaGroup: func(_ context.Context, _ int64, _ int, files []File) error {
+			names := make([]string, len(files))
+			for i, f := range files {
+				names[i] = f.Filename
+			}
+			r.groups = append(r.groups, names)
+			return groupErr
+		},
+	}
+}
+
+func sendfileBlocks(t *testing.T, dir string, names ...string) string {
+	t.Helper()
+	var b strings.Builder
+	for _, n := range names {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, n), []byte(n), 0o644))
+		fmt.Fprintf(&b, "```nclaw:sendfile\n{\"path\":%q}\n```\n", n)
+	}
+	return b.String()
+}
+
+func TestExecuteBlocks_MixedTypesGroupedByAlbumKind(t *testing.T) {
+	dir := t.TempDir()
+	text := sendfileBlocks(t, dir, "chart.png", "report.pdf", "clip.mp4", "data.xlsx", "song.mp3")
+
+	var r recordingSenders
+	ExecuteBlocks(context.TODO(), r.senders(nil), text, 1, 0, dir)
+
+	assert.Equal(t, [][]string{{"chart.png", "clip.mp4"}, {"report.pdf", "data.xlsx"}}, r.groups)
+	assert.Equal(t, []string{"song.mp3"}, r.docs)
+}
+
+func TestExecuteBlocks_TrailingSingleFileSentIndividually(t *testing.T) {
+	dir := t.TempDir()
+	names := make([]string, 11)
+	for i := range names {
+		names[i] = fmt.Sprintf("f%02d.txt", i)
+	}
+	text := sendfileBlocks(t, dir, names...)
+
+	var r recordingSenders
+	ExecuteBlocks(context.TODO(), r.senders(nil), text, 1, 0, dir)
+
+	require.Len(t, r.groups, 1)
+	assert.Len(t, r.groups[0], 10)
+	assert.Equal(t, []string{"f10.txt"}, r.docs)
+}
+
+func TestExecuteBlocks_RejectedGroupFallsBackToIndividualSends(t *testing.T) {
+	dir := t.TempDir()
+	text := sendfileBlocks(t, dir, "a.txt", "b.txt")
+
+	var r recordingSenders
+	ExecuteBlocks(context.TODO(), r.senders(errors.New("400 Bad Request")), text, 1, 0, dir)
+
+	assert.Len(t, r.groups, 1)
+	assert.Equal(t, []string{"a.txt", "b.txt"}, r.docs)
+}
+
+func TestExecuteBlocks_AbsolutePathWithRelativeChatDir(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir := filepath.Join("data", "1")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "out.txt"), []byte("x"), 0o644))
+	abs, err := filepath.Abs(filepath.Join(dir, "out.txt"))
+	require.NoError(t, err)
+
+	var r recordingSenders
+	text := fmt.Sprintf("```nclaw:sendfile\n{\"path\":%q}\n```", abs)
+	ExecuteBlocks(context.TODO(), r.senders(nil), text, 1, 0, dir)
+
+	assert.Equal(t, []string{"out.txt"}, r.docs)
+}
+
+func TestExecuteBlocks_RelativeChatDirStillRejectsEscape(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	tmp := filepath.Join(root, "tmp")
+	require.NoError(t, os.MkdirAll(tmp, 0o755))
+	t.Setenv("TMPDIR", tmp) // the test root itself lives under the OS temp dir, which is allowed
+	dir := filepath.Join("data", "1")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join("data", "secret.txt"), []byte("x"), 0o644))
+
+	var r recordingSenders
+	text := "```nclaw:sendfile\n{\"path\":\"../secret.txt\"}\n```"
+	ExecuteBlocks(context.TODO(), r.senders(nil), text, 1, 0, dir)
+
+	assert.Empty(t, r.docs)
 }

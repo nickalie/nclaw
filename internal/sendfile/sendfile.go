@@ -60,7 +60,7 @@ type Senders struct {
 }
 
 // ExecuteBlocks extracts nclaw:sendfile blocks from text and sends the files.
-// When sendMediaGroup is provided and there are 2+ files, files are grouped into media groups.
+// When senders.MediaGroup is set, files Telegram allows in one album are grouped into media groups.
 // Does not modify the input text.
 func ExecuteBlocks(
 	ctx context.Context, senders Senders,
@@ -83,12 +83,37 @@ func ExecuteBlocks(
 		return
 	}
 
-	if len(files) == 1 || senders.MediaGroup == nil {
+	if senders.MediaGroup == nil {
 		sendFilesIndividually(ctx, senders, files, chatID, threadID)
 		return
 	}
 
-	sendFilesAsGroups(ctx, senders.MediaGroup, files, chatID, threadID)
+	for _, group := range groupByAlbumKind(files) {
+		sendFilesAsGroups(ctx, senders, group, chatID, threadID)
+	}
+}
+
+// groupByAlbumKind splits files into sets Telegram accepts in one media group:
+// photos with videos, documents only with documents, audio only with audio.
+func groupByAlbumKind(files []File) [][]File {
+	var order []MediaType
+	groups := make(map[MediaType][]File)
+	for _, f := range files {
+		kind := f.MediaType
+		if kind == MediaPhoto {
+			kind = MediaVideo
+		}
+		if _, ok := groups[kind]; !ok {
+			order = append(order, kind)
+		}
+		groups[kind] = append(groups[kind], f)
+	}
+
+	result := make([][]File, 0, len(order))
+	for _, kind := range order {
+		result = append(result, groups[kind])
+	}
+	return result
 }
 
 func resolveFile(jsonStr, dir string) (File, bool) {
@@ -102,7 +127,11 @@ func resolveFile(jsonStr, dir string) (File, bool) {
 	if !filepath.IsAbs(filePath) {
 		filePath = filepath.Join(dir, filePath)
 	}
-	filePath = filepath.Clean(filePath)
+	filePath, err := filepath.Abs(filePath)
+	if err != nil {
+		log.Printf("sendfile: abs error for %s: %v", cmd.Path, err)
+		return File{}, false
+	}
 	resolved, err := filepath.EvalSymlinks(filePath)
 	if err != nil {
 		log.Printf("sendfile: resolve error for %s: %v", filePath, err)
@@ -160,13 +189,15 @@ func sendFilesIndividually(ctx context.Context, senders Senders, files []File, c
 	}
 }
 
-func sendFilesAsGroups(ctx context.Context, sendMediaGroup SendMediaGroupFunc, files []File, chatID int64, threadID int) {
+// sendFilesAsGroups sends files in media groups of 2-10, falling back to individual sends for a
+// lone file or a rejected group so no file is silently lost.
+func sendFilesAsGroups(ctx context.Context, senders Senders, files []File, chatID int64, threadID int) {
 	for i := 0; i < len(files); i += maxMediaGroupSize {
-		end := i + maxMediaGroupSize
-		if end > len(files) {
-			end = len(files)
+		batch := files[i:min(i+maxMediaGroupSize, len(files))]
+		if len(batch) == 1 {
+			sendFilesIndividually(ctx, senders, batch, chatID, threadID)
+			continue
 		}
-		batch := files[i:end]
 
 		names := make([]string, len(batch))
 		for j, f := range batch {
@@ -174,8 +205,9 @@ func sendFilesAsGroups(ctx context.Context, sendMediaGroup SendMediaGroupFunc, f
 		}
 		log.Printf("sendfile: sending media group %v to chat=%d thread=%d", names, chatID, threadID)
 
-		if err := sendMediaGroup(ctx, chatID, threadID, batch); err != nil {
-			log.Printf("sendfile: media group send error: %v", err)
+		if err := senders.MediaGroup(ctx, chatID, threadID, batch); err != nil {
+			log.Printf("sendfile: media group send error, sending individually: %v", err)
+			sendFilesIndividually(ctx, senders, batch, chatID, threadID)
 		}
 	}
 }
@@ -183,7 +215,11 @@ func sendFilesAsGroups(ctx context.Context, sendMediaGroup SendMediaGroupFunc, f
 // isAllowedPath checks whether resolved path is inside the chat dir or the OS temp dir.
 func isAllowedPath(resolved, chatDir string) bool {
 	for _, allowed := range []string{chatDir, os.TempDir()} {
-		allowedResolved, err := filepath.EvalSymlinks(allowed)
+		abs, err := filepath.Abs(allowed)
+		if err != nil {
+			continue
+		}
+		allowedResolved, err := filepath.EvalSymlinks(abs)
 		if err != nil {
 			continue
 		}
